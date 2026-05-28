@@ -1,4 +1,4 @@
-<main>
+<main *ngIf="!isCheckoutView">
   <section class="hero" data-parallax="hero">
     <img src="assets/banner-hero.webp" alt="Banner principal Tech-Tees Copa do Mundo Brasil" data-parallax-layer="hero" />
   </section>
@@ -53,6 +53,10 @@
           <p>{{ formatCurrency(product.price) }}</p>
           <small>{{ product.category }} · {{ product.sales || 0 }} vendas</small>
           <div class="swatches"><span></span><span></span></div>
+          <button class="add-to-cart" type="button" (click)="addToCart(product)">
+            <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
+            <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
+          </button>
         </div>
       </article>
     </div>
@@ -137,7 +141,7 @@
   </section>
 </main>
 
-<footer class="footer reveal">
+<footer class="footer reveal" *ngIf="!isCheckoutView">
   <div>
     <strong>TECH-TEES</strong>
     <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
@@ -162,4 +166,198 @@
   </div>
 </footer>
 
-<div class="copyright">© 2026 TECH-TEES. Todos os direitos reservados.</div>
+<div class="copyright" *ngIf="!isCheckoutView">© 2026 TECH-TEES. Todos os direitos reservados.</div>
+
+<main class="checkout-page" *ngIf="isCheckoutView">
+  <header class="checkout-topbar">
+    <button type="button" class="checkout-back" (click)="backToStore()">← Voltar</button>
+    <strong>TECH-TEES</strong>
+    <span>Checkout seguro</span>
+  </header>
+
+  <section class="checkout-hero">
+    <span class="checkout-kicker">Finalização premium</span>
+    <h1>Quase lá. Seu drop está reservado.</h1>
+    <p>Complete endereço e pagamento em uma experiência limpa, rápida e protegida.</p>
+  </section>
+
+  <nav class="checkout-progress" aria-label="Progresso do checkout">
+    <div class="progress-step" [class.active]="checkoutStep === 'address'" [class.done]="addressStepComplete()">
+      <span>⌂</span>
+      <strong>Endereço</strong>
+    </div>
+    <div class="progress-line" [class.done]="addressStepComplete()"></div>
+    <div class="progress-step" [class.active]="checkoutStep === 'payment'" [class.done]="paymentStepComplete()">
+      <span>◇</span>
+      <strong>Pagamento</strong>
+    </div>
+    <div class="progress-line" [class.done]="paymentStepComplete()"></div>
+    <div class="progress-step" [class.active]="checkoutStep === 'confirmation'">
+      <span>✓</span>
+      <strong>Confirmação</strong>
+    </div>
+  </nav>
+
+  <div class="checkout-shell">
+    <section class="checkout-panel">
+      <form class="address-form" *ngIf="checkoutStep === 'address'" (ngSubmit)="continueToPayment()" novalidate>
+        <div class="checkout-section-head">
+          <span>Etapa 01</span>
+          <h2>Endereço de entrega</h2>
+          <p>Usamos seu CEP para acelerar o preenchimento e reduzir erros no envio.</p>
+        </div>
+
+        <div class="form-grid">
+          <label class="full" [class.invalid]="fieldInvalid('fullName')">
+            Nome completo
+            <input name="fullName" autocomplete="name" [(ngModel)]="addressForm.fullName" />
+          </label>
+          <label [class.invalid]="fieldInvalid('cpf')">
+            CPF
+            <input name="cpf" inputmode="numeric" autocomplete="off" [(ngModel)]="addressForm.cpf" />
+          </label>
+          <label [class.invalid]="fieldInvalid('cep')">
+            CEP
+            <input name="cep" inputmode="numeric" autocomplete="postal-code" [(ngModel)]="addressForm.cep" (blur)="fetchAddressByCep()" />
+            <small *ngIf="cepLoading">Buscando endereço...</small>
+          </label>
+          <label class="full" [class.invalid]="fieldInvalid('street')">
+            Rua
+            <input name="street" autocomplete="address-line1" [(ngModel)]="addressForm.street" />
+          </label>
+          <label [class.invalid]="fieldInvalid('number')">
+            Número
+            <input name="number" autocomplete="address-line2" [(ngModel)]="addressForm.number" />
+          </label>
+          <label>
+            Complemento
+            <input name="complement" autocomplete="address-line3" [(ngModel)]="addressForm.complement" />
+          </label>
+          <label [class.invalid]="fieldInvalid('neighborhood')">
+            Bairro
+            <input name="neighborhood" [(ngModel)]="addressForm.neighborhood" />
+          </label>
+          <label [class.invalid]="fieldInvalid('city')">
+            Cidade
+            <input name="city" autocomplete="address-level2" [(ngModel)]="addressForm.city" />
+          </label>
+          <label [class.invalid]="fieldInvalid('state')">
+            Estado
+            <input name="state" maxlength="2" autocomplete="address-level1" [(ngModel)]="addressForm.state" />
+          </label>
+        </div>
+
+        <p class="checkout-error" *ngIf="cepError">{{ cepError }}</p>
+        <p class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</p>
+
+        <button class="checkout-primary" type="submit">Continuar para pagamento</button>
+      </form>
+
+      <section class="payment-step" *ngIf="checkoutStep === 'payment'">
+        <div class="checkout-section-head">
+          <span>Etapa 02</span>
+          <h2>Pagamento</h2>
+          <p>Pagamento criptografado por Mercado Pago. Use cartão de teste quando estiver com credenciais TEST.</p>
+        </div>
+        <div id="cardPaymentBrick_container" class="payment-brick"></div>
+        <p class="checkout-status" *ngIf="paymentStatus">{{ paymentStatus }}</p>
+        <p class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</p>
+      </section>
+
+      <section class="confirmation-step" *ngIf="checkoutStep === 'confirmation'">
+        <span class="confirmation-icon">✓</span>
+        <h2>Pedido recebido</h2>
+        <p>{{ paymentStatus || 'Pagamento enviado. Em instantes você receberá a confirmação.' }}</p>
+        <button class="checkout-primary" type="button" (click)="backToStore()">Voltar para a loja</button>
+      </section>
+    </section>
+
+    <aside class="order-summary">
+      <div class="summary-head">
+        <span>Resumo do pedido</span>
+        <strong>{{ cartQuantity() }} {{ cartQuantity() === 1 ? 'item' : 'itens' }}</strong>
+      </div>
+
+      <div class="summary-items">
+        <article *ngFor="let item of cartItems">
+          <img [src]="normalizeImagePath(item.product.image)" [alt]="item.product.name" (error)="setFallbackImage($event)" />
+          <div>
+            <strong>{{ item.product.name }}</strong>
+            <span>Qtd. {{ item.quantity }}</span>
+          </div>
+          <p>{{ formatCurrency(itemTotal(item)) }}</p>
+        </article>
+      </div>
+
+      <div class="summary-totals">
+        <div><span>Subtotal</span><strong>{{ formatCurrency(cartTotal()) }}</strong></div>
+        <div><span>Frete</span><strong>{{ shipping() === 0 ? 'Grátis' : formatCurrency(shipping()) }}</strong></div>
+        <div class="summary-total"><span>Total final</span><strong>{{ formatCurrency(orderTotal()) }}</strong></div>
+      </div>
+
+      <button class="checkout-primary" type="button" *ngIf="checkoutStep === 'address'" (click)="continueToPayment()">
+        Finalizar compra
+      </button>
+      <button class="checkout-primary" type="button" *ngIf="checkoutStep === 'payment'" (click)="backToStore()">
+        Editar carrinho
+      </button>
+    </aside>
+  </div>
+</main>
+
+<button
+  class="floating-cart"
+  *ngIf="!isCheckoutView"
+  type="button"
+  aria-label="Abrir carrinho"
+  [class.has-items]="cartQuantity()"
+  (click)="openCart()"
+>
+  <span>Carrinho</span>
+  <strong *ngIf="cartQuantity()">{{ cartQuantity() }}</strong>
+</button>
+
+<div class="cart-backdrop" *ngIf="cartOpen" (click)="closeCart()"></div>
+
+<aside class="cart-drawer" [class.open]="cartOpen" aria-live="polite" aria-label="Carrinho de compras">
+  <header class="cart-drawer-head">
+    <div>
+      <span>Carrinho</span>
+      <strong>{{ cartQuantity() }} {{ cartQuantity() === 1 ? 'item' : 'itens' }}</strong>
+    </div>
+    <button type="button" aria-label="Fechar carrinho" (click)="closeCart()">×</button>
+  </header>
+
+  <div class="cart-empty" *ngIf="!cartItems.length">
+    <strong>Seu carrinho está vazio</strong>
+    <p>Escolha uma camiseta da coleção para começar.</p>
+  </div>
+
+  <div class="cart-items" *ngIf="cartItems.length">
+    <article class="cart-item" *ngFor="let item of cartItems">
+      <img
+        [src]="normalizeImagePath(item.product.image)"
+        [alt]="item.product.name"
+        (error)="setFallbackImage($event)"
+      />
+      <div class="cart-item-info">
+        <h3>{{ item.product.name }}</h3>
+        <p>{{ formatCurrency(item.product.price) }}</p>
+        <div class="cart-quantity">
+          <button type="button" aria-label="Diminuir quantidade" (click)="decreaseCartItem(item)">−</button>
+          <span>{{ item.quantity }}</span>
+          <button type="button" aria-label="Aumentar quantidade" (click)="increaseCartItem(item)">+</button>
+        </div>
+      </div>
+      <button class="cart-remove" type="button" aria-label="Remover item" (click)="removeCartItem(item)">×</button>
+    </article>
+  </div>
+
+  <footer class="cart-drawer-foot" *ngIf="cartItems.length">
+    <div>
+      <span>Total</span>
+      <strong>{{ formatCurrency(cartTotal()) }}</strong>
+    </div>
+    <button type="button" (click)="goToCheckout()">Finalizar compra</button>
+  </footer>
+</aside>

@@ -1,7 +1,38 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 import { AfterViewInit, Component, ElementRef, OnDestroy, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+
+declare global {
+  interface Window {
+    MercadoPago?: new (publicKey: string, options?: { locale?: string }) => MercadoPagoInstance;
+  }
+}
+
+interface MercadoPagoInstance {
+  bricks(): {
+    create(
+      type: 'cardPayment',
+      containerId: string,
+      settings: MercadoPagoCardPaymentSettings,
+    ): Promise<MercadoPagoBrickController>;
+  };
+}
+
+interface MercadoPagoBrickController {
+  unmount?: () => void;
+}
+
+interface MercadoPagoCardPaymentSettings {
+  initialization: { amount: number };
+  customization?: Record<string, unknown>;
+  callbacks: {
+    onReady: () => void;
+    onSubmit: (formData: Record<string, unknown>) => Promise<void>;
+    onError: (error: unknown) => void;
+  };
+}
 
 interface StoreResponse {
   id: string;
@@ -19,10 +50,37 @@ interface Product {
   status?: string;
 }
 
+interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+type CheckoutStep = 'address' | 'payment' | 'confirmation';
+
+interface AddressForm {
+  fullName: string;
+  cpf: string;
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+}
+
+interface MercadoPagoPaymentResponse {
+  id: number;
+  status: string;
+  statusDetail?: string;
+  paymentMethodId?: string;
+  externalReference: string;
+}
+
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
@@ -31,6 +89,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
 
   readonly apiBaseUrl = 'https://tech-tees-admin-api.vercel.app';
+  readonly mercadoPagoPublicKey = 'TEST-4795ac8f-4a54-47c9-858f-de6c007ca6cf';
   readonly storeName = 'Copa do mundo';
   readonly storeSlug = 'copa-do-mundo';
   readonly fallbackImage = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 800 1000%22%3E%3Crect width=%22800%22 height=%221000%22 fill=%22%23eee8dc%22/%3E%3Ctext x=%22400%22 y=%22500%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22700%22 fill=%22%236d675d%22%3ETECH-TEES%3C/text%3E%3C/svg%3E';
@@ -44,10 +103,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   editorialProducts: Array<Product | null> = [null, null];
   lookbookProducts: Array<Product | null> = [null, null, null, null];
   skeletonItems = Array.from({ length: 8 });
+  cartItems: CartItem[] = [];
+  lastAddedProductName = '';
+  cartOpen = false;
+  isCheckoutView = false;
+  checkoutStep: CheckoutStep = 'address';
+  addressSubmitted = false;
+  cepLoading = false;
+  cepError = '';
+  checkoutError = '';
+  paymentStatus = '';
+  isCheckingOut = false;
+  readonly addressForm: AddressForm = {
+    fullName: '',
+    cpf: '',
+    cep: '',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+  };
 
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private scrollHandler?: () => void;
   private resizeHandler?: () => void;
+  private cardPaymentBrickController: MercadoPagoBrickController | null = null;
 
   ngAfterViewInit(): void {
     this.initScrollAnimations();
@@ -90,6 +172,208 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const image = event.target as HTMLImageElement;
     image.onerror = null;
     image.src = this.fallbackImage;
+  }
+
+  addToCart(product: Product): void {
+    const productKey = this.getProductKey(product);
+    const existingItem = this.cartItems.find((item) => this.getProductKey(item.product) === productKey);
+
+    if (existingItem) {
+      existingItem.quantity += 1;
+    } else {
+      this.cartItems = [...this.cartItems, { product, quantity: 1 }];
+    }
+
+    this.lastAddedProductName = product.name;
+  }
+
+  goToCheckout(): void {
+    if (!this.cartItems.length) {
+      return;
+    }
+
+    this.cartOpen = false;
+    this.isCheckoutView = true;
+    this.checkoutStep = 'address';
+    this.checkoutError = '';
+    this.paymentStatus = '';
+    this.resetPaymentBrick();
+    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  backToStore(): void {
+    this.isCheckoutView = false;
+    this.checkoutError = '';
+    this.paymentStatus = '';
+    this.resetPaymentBrick();
+    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  openCart(): void {
+    this.cartOpen = true;
+  }
+
+  closeCart(): void {
+    this.cartOpen = false;
+  }
+
+  increaseCartItem(item: CartItem): void {
+    item.quantity += 1;
+  }
+
+  decreaseCartItem(item: CartItem): void {
+    if (item.quantity <= 1) {
+      this.removeCartItem(item);
+      return;
+    }
+
+    item.quantity -= 1;
+  }
+
+  removeCartItem(item: CartItem): void {
+    const productKey = this.getProductKey(item.product);
+    this.cartItems = this.cartItems.filter((cartItem) => this.getProductKey(cartItem.product) !== productKey);
+
+    if (this.cartItems.length === 0) {
+      this.closeCart();
+      this.isCheckoutView = false;
+      this.resetPaymentBrick();
+    }
+  }
+
+  cartQuantity(): number {
+    return this.cartItems.reduce((total, item) => total + item.quantity, 0);
+  }
+
+  cartTotal(): number {
+    return this.cartItems.reduce((total, item) => total + Number(item.product.price || 0) * item.quantity, 0);
+  }
+
+  shipping(): number {
+    if (!this.cartItems.length || this.cartTotal() >= 199) {
+      return 0;
+    }
+
+    return 19.9;
+  }
+
+  orderTotal(): number {
+    return this.cartTotal() + this.shipping();
+  }
+
+  productCartQuantity(product: Product): number {
+    const productKey = this.getProductKey(product);
+    return this.cartItems.find((item) => this.getProductKey(item.product) === productKey)?.quantity || 0;
+  }
+
+  itemTotal(item: CartItem): number {
+    return Number(item.product.price || 0) * item.quantity;
+  }
+
+  fieldInvalid(field: keyof AddressForm): boolean {
+    return this.addressSubmitted && !String(this.addressForm[field] || '').trim();
+  }
+
+  addressStepComplete(): boolean {
+    return this.checkoutStep === 'payment' || this.checkoutStep === 'confirmation';
+  }
+
+  paymentStepComplete(): boolean {
+    return this.checkoutStep === 'confirmation';
+  }
+
+  async fetchAddressByCep(): Promise<void> {
+    const cep = this.onlyDigits(this.addressForm.cep);
+
+    if (cep.length !== 8) {
+      return;
+    }
+
+    this.cepLoading = true;
+    this.cepError = '';
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
+
+      if (data?.erro) {
+        this.cepError = 'CEP não encontrado. Confira os dados.';
+        return;
+      }
+
+      this.addressForm.street = data.logradouro || this.addressForm.street;
+      this.addressForm.neighborhood = data.bairro || this.addressForm.neighborhood;
+      this.addressForm.city = data.localidade || this.addressForm.city;
+      this.addressForm.state = data.uf || this.addressForm.state;
+    } catch {
+      this.cepError = 'Não foi possível buscar o CEP agora.';
+    } finally {
+      this.cepLoading = false;
+    }
+  }
+
+  continueToPayment(): void {
+    this.addressSubmitted = true;
+    this.checkoutError = '';
+
+    if (!this.isAddressValid()) {
+      this.checkoutError = 'Preencha os campos obrigatórios para continuar.';
+      return;
+    }
+
+    this.checkoutStep = 'payment';
+    setTimeout(() => void this.renderPaymentBrick());
+  }
+
+  async submitCheckoutPayment(formData: Record<string, unknown>): Promise<void> {
+    if (!this.cartItems.length || this.isCheckingOut) {
+      return;
+    }
+
+    this.isCheckingOut = true;
+    this.checkoutError = '';
+    this.paymentStatus = 'Processando pagamento...';
+
+    try {
+      const payment = await firstValueFrom(
+        this.http.post<MercadoPagoPaymentResponse>(`${this.apiBaseUrl}/checkout/process-payment`, {
+          payment: {
+            ...formData,
+            shippingAddress: { ...this.addressForm },
+          },
+          items: this.cartItems.map((item) => ({
+            id: item.product.id || item.product.name,
+            title: item.product.name,
+            quantity: item.quantity,
+            unit_price: Number(item.product.price || 0),
+            image: item.product.image,
+          })),
+          shipping: this.shipping(),
+        }),
+      );
+
+      if (payment.status === 'approved') {
+        this.paymentStatus = 'Pagamento aprovado. Pedido recebido!';
+        this.checkoutStep = 'confirmation';
+        this.resetPaymentBrick();
+        return;
+      }
+
+      if (payment.status === 'pending' || payment.status === 'in_process') {
+        this.paymentStatus = 'Pagamento recebido e em análise.';
+        this.checkoutStep = 'confirmation';
+        this.resetPaymentBrick();
+        return;
+      }
+
+      this.paymentStatus = '';
+      this.checkoutError = 'Pagamento recusado. Revise os dados e tente novamente.';
+    } catch (error) {
+      this.paymentStatus = '';
+      this.checkoutError = `Não foi possível processar o pagamento: ${this.getErrorMessage(error)}`;
+    } finally {
+      this.isCheckingOut = false;
+    }
   }
 
   private async loadProducts(): Promise<void> {
@@ -161,6 +445,118 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
 
     return products[index % products.length];
+  }
+
+  private getProductKey(product: Product): string {
+    return product.id || product.name;
+  }
+
+  private isAddressValid(): boolean {
+    const requiredFields: Array<keyof AddressForm> = [
+      'fullName',
+      'cpf',
+      'cep',
+      'street',
+      'number',
+      'neighborhood',
+      'city',
+      'state',
+    ];
+
+    const requiredFilled = requiredFields.every((field) => String(this.addressForm[field] || '').trim());
+    return requiredFilled && this.onlyDigits(this.addressForm.cpf).length === 11 && this.onlyDigits(this.addressForm.cep).length === 8;
+  }
+
+  private async renderPaymentBrick(): Promise<void> {
+    if (this.cardPaymentBrickController || this.isCheckingOut || this.checkoutStep !== 'payment') {
+      return;
+    }
+
+    if (!this.mercadoPagoPublicKey) {
+      this.checkoutError = 'Configure a chave pública do Mercado Pago para habilitar o pagamento.';
+      return;
+    }
+
+    if (!window.MercadoPago) {
+      this.checkoutError = 'Não foi possível carregar o checkout do Mercado Pago. Tente novamente.';
+      return;
+    }
+
+    this.isCheckingOut = true;
+
+    try {
+      await this.waitForPaymentBrickContainer();
+      const mercadoPago = new window.MercadoPago(this.mercadoPagoPublicKey, { locale: 'pt-BR' });
+      const bricksBuilder = mercadoPago.bricks();
+
+      this.cardPaymentBrickController = await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', {
+        initialization: {
+          amount: Number(this.orderTotal().toFixed(2)),
+        },
+        customization: {
+          visual: {
+            style: {
+              theme: 'default',
+            },
+          },
+        },
+        callbacks: {
+          onReady: () => {
+            this.checkoutError = '';
+          },
+          onSubmit: async (formData) => {
+            await this.submitCheckoutPayment(formData);
+          },
+          onError: () => {
+            this.checkoutError = 'Não foi possível validar os dados do pagamento.';
+          },
+        },
+      });
+    } catch (error) {
+      this.checkoutError = `Não foi possível iniciar o pagamento: ${this.getErrorMessage(error)}`;
+    } finally {
+      this.isCheckingOut = false;
+    }
+  }
+
+  private async waitForPaymentBrickContainer(): Promise<void> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (document.getElementById('cardPaymentBrick_container')) {
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+
+    throw new Error('área do formulário de pagamento não foi encontrada.');
+  }
+
+  private resetPaymentBrick(): void {
+    this.cardPaymentBrickController?.unmount?.();
+    this.cardPaymentBrickController = null;
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (typeof error === 'object' && error && 'error' in error) {
+      const httpError = error as { error?: { error?: string } };
+      if (httpError.error?.error) {
+        return httpError.error.error;
+      }
+    }
+
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    if (typeof error === 'string' && error.trim()) {
+      return error;
+    }
+
+    return 'verifique os dados e tente novamente.';
+  }
+
+  private onlyDigits(value: string): string {
+    return String(value || '').replace(/\D/g, '');
   }
 
   private initScrollAnimations(): void {
