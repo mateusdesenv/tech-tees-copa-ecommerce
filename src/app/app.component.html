@@ -1,0 +1,165 @@
+<main>
+  <section class="hero" data-parallax="hero">
+    <img src="assets/banner-hero.webp" alt="Banner principal Tech-Tees Copa do Mundo Brasil" data-parallax-layer="hero" />
+  </section>
+
+  <section class="benefits reveal">
+    <div><strong>Frete grátis</strong><span>acima de R$199</span></div>
+    <div><strong>Troca fácil</strong><span>até 7 dias</span></div>
+    <div><strong>Até 6x</strong><span>sem juros</span></div>
+    <div><strong>Atendimento</strong><span>via WhatsApp</span></div>
+  </section>
+
+  <section id="shop" class="section reveal">
+    <div class="section-head">
+      <div>
+        <span class="label dark">Drop 01</span>
+        <h2>Shop the collection</h2>
+      </div>
+      <a href="#" class="view-all">Ver todos →</a>
+    </div>
+
+    <div class="products-grid" id="productsGrid">
+      <ng-container *ngIf="loading">
+        <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of skeletonItems">
+          <div class="product-media"></div>
+          <div class="product-info">
+            <span class="skeleton-line title"></span>
+            <span class="skeleton-line price"></span>
+            <div class="swatches"><span></span><span></span></div>
+          </div>
+        </article>
+      </ng-container>
+
+      <p *ngIf="!loading && catalogMessage" class="catalog-message" [class.error]="catalogTone === 'error'">
+        {{ catalogMessage }}
+      </p>
+
+      <article
+        class="product-card"
+        *ngFor="let product of activeProducts; let index = index"
+        [style.--card-delay.ms]="index * 70"
+      >
+        <div class="product-media">
+          <img
+            [src]="normalizeImagePath(product.image)"
+            [alt]="product.name"
+            loading="lazy"
+            (error)="setFallbackImage($event)"
+          />
+        </div>
+        <div class="product-info">
+          <h3>{{ product.name }}</h3>
+          <p>{{ formatCurrency(product.price) }}</p>
+          <small>{{ product.category }} · {{ product.sales || 0 }} vendas</small>
+          <div class="swatches"><span></span><span></span></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="manifesto" class="campaign reveal" data-parallax="section">
+    <div class="campaign-content" data-parallax-layer="slow">
+      <span class="label">Brasil Football Department</span>
+      <h2>Vista a sua paixão sem parecer fantasia.</h2>
+      <p>Camisetas com leitura premium: menos souvenir, mais streetwear. Pensadas para vender na Copa e continuar usáveis depois dela.</p>
+      <a href="#shop" class="btn btn-dark">Comprar agora</a>
+    </div>
+    <div class="campaign-image">
+      <img
+        [src]="featuredProduct ? normalizeImagePath(featuredProduct.image) : fallbackImage"
+        [alt]="featuredProduct?.name || 'Camiseta Copa do Mundo Tech-Tees'"
+        [class.is-loaded]="true"
+        data-parallax-layer="product"
+        (error)="setFallbackImage($event)"
+      />
+    </div>
+  </section>
+
+  <section class="section compact reveal" data-parallax="section">
+    <div class="section-head">
+      <div>
+        <span class="label dark">Mais fortes</span>
+        <h2>Novos lançamentos</h2>
+      </div>
+      <a href="#" class="view-all">Ver todos →</a>
+    </div>
+
+    <div class="launch-grid">
+      <article class="launch-card green">
+        <h3>Copa do Mundo</h3>
+        <p>Peças com troféu, tipografia esportiva e estética editorial.</p>
+      </article>
+      <article class="launch-card yellow">
+        <h3>Seleção Brasil</h3>
+        <p>Verde, amarelo e off-white em composições comerciais.</p>
+      </article>
+      <article class="launch-card dark-card">
+        <h3>Tech Tees</h3>
+        <p>Futebol, internet e streetwear no mesmo drop.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="drops" class="section editorial reveal" data-parallax="section">
+    <div class="editorial-text" data-parallax-layer="slow">
+      <span class="label dark">Estratégia do drop</span>
+      <h2>70% estilo. 30% meme.</h2>
+      <p>O foco é manter alto valor percebido. As peças precisam funcionar como roupa de verdade, não apenas como piada de Copa.</p>
+    </div>
+    <div class="editorial-products">
+      <img
+        *ngFor="let product of editorialProducts"
+        [src]="product ? normalizeImagePath(product.image) : fallbackImage"
+        [alt]="product?.name || 'Camiseta Tech-Tees Brasil'"
+        [class.is-loaded]="true"
+        data-parallax-layer="product"
+        (error)="setFallbackImage($event)"
+      />
+    </div>
+  </section>
+
+  <section id="lookbook" class="lookbook reveal" data-parallax="section">
+    <div>
+      <h2>Tech-Tees no mundo</h2>
+      <p>Marque &#64;techtees para aparecer no lookbook.</p>
+    </div>
+    <div class="lookbook-strip">
+      <img
+        *ngFor="let product of lookbookProducts"
+        [src]="product ? normalizeImagePath(product.image) : fallbackImage"
+        [alt]="product?.name || 'Produto Tech-Tees'"
+        [class.is-loaded]="true"
+        data-parallax-layer="product"
+        (error)="setFallbackImage($event)"
+      />
+    </div>
+  </section>
+</main>
+
+<footer class="footer reveal">
+  <div>
+    <strong>TECH-TEES</strong>
+    <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
+  </div>
+  <div>
+    <strong>Institucional</strong>
+    <a>Sobre nós</a>
+    <a>Lookbook</a>
+    <a>Sustentabilidade</a>
+  </div>
+  <div>
+    <strong>Ajuda</strong>
+    <a>Trocas e devoluções</a>
+    <a>Privacidade</a>
+    <a>Termos de uso</a>
+  </div>
+  <div>
+    <strong>Contato</strong>
+    <a>WhatsApp</a>
+    <a>contato&#64;techtees.com</a>
+    <a>Seg. a sex. 9h às 18h</a>
+  </div>
+</footer>
+
+<div class="copyright">© 2026 TECH-TEES. Todos os direitos reservados.</div>
