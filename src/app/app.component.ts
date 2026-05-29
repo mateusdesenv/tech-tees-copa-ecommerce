@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { AfterViewInit, Component, ElementRef, OnDestroy, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../environments/environment';
 
 declare global {
   interface Window {
@@ -99,10 +100,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
 
-  readonly apiBaseUrl = 'http://localhost:3000';
-  readonly mercadoPagoPublicKey = 'TEST-4795ac8f-4a54-47c9-858f-de6c007ca6cf';
-  readonly storeName = 'Copa do mundo';
-  readonly storeSlug = 'copa-do-mundo';
+  readonly apiBaseUrl = environment.apiBaseUrl;
+  readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
+  readonly storeName = environment.storeName;
+  readonly storeSlug = environment.storeSlug;
   readonly fallbackImage = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 800 1000%22%3E%3Crect width=%22800%22 height=%221000%22 fill=%22%23eee8dc%22/%3E%3Ctext x=%22400%22 y=%22500%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22700%22 fill=%22%236d675d%22%3ETECH-TEES%3C/text%3E%3C/svg%3E';
 
   loading = true;
