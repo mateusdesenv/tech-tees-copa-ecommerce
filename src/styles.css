@@ -407,6 +407,10 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   gap: clamp(24px, 5vw, 74px);
   align-items: center;
 }
+.product-detail-gallery {
+  display: grid;
+  gap: 14px;
+}
 .product-detail-media {
   position: relative;
   background: #f0ebe1;
@@ -452,6 +456,46 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   cursor: not-allowed;
   opacity: .42;
 }
+.product-color-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 10px;
+}
+.product-color-thumbs button {
+  min-width: 0;
+  padding: 7px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.72);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-align: center;
+  text-transform: uppercase;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease, color .2s ease;
+}
+.product-color-thumbs button:hover,
+.product-color-thumbs button.active {
+  border-color: var(--dark);
+  color: var(--dark);
+  box-shadow: 0 14px 34px rgba(12,18,14,.1);
+  transform: translateY(-2px);
+}
+.product-color-thumbs img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  background: #f0ebe1;
+  object-fit: contain;
+}
+.product-color-thumbs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .product-detail-info {
   max-width: 560px;
 }
@@ -470,6 +514,19 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   letter-spacing: -.06em;
   text-transform: uppercase;
   text-shadow: none;
+}
+.selected-color-label {
+  display: inline-flex;
+  margin-top: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255,255,255,.7);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .product-detail-price {
   margin-top: 22px;
@@ -985,6 +1042,15 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   margin-bottom: 8px;
   font-size: 13px;
   line-height: 1.25;
+  text-transform: uppercase;
+}
+.cart-item-info small,
+.summary-items small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
   text-transform: uppercase;
 }
 .cart-item-info p {

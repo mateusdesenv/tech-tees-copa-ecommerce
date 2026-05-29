@@ -46,9 +46,18 @@ interface Product {
   price: number | string;
   image?: string;
   imageBack?: string;
+  color?: string;
+  colors?: ProductColorVariation[];
   category?: string;
   sales?: number;
   status?: string;
+}
+
+interface ProductColorVariation {
+  id?: string;
+  color: string;
+  image?: string;
+  imageBack?: string;
 }
 
 interface CartItem {
@@ -101,6 +110,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   products: Product[] = [];
   activeProducts: Product[] = [];
   selectedProduct: Product | null = null;
+  selectedProductColorIndex = 0;
   selectedProductImageSide: 'front' | 'back' = 'front';
   featuredProduct: Product | null = null;
   editorialProducts: Array<Product | null> = [null, null];
@@ -190,8 +200,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.lastAddedProductName = product.name;
   }
 
+  addSelectedProductToCart(): void {
+    const product = this.selectedProductWithSelectedColor();
+
+    if (product) {
+      this.addToCart(product);
+    }
+  }
+
   openProduct(product: Product): void {
     this.selectedProduct = product;
+    this.selectedProductColorIndex = 0;
     this.selectedProductImageSide = 'front';
     this.cartOpen = false;
     this.isCheckoutView = false;
@@ -201,16 +220,55 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   closeProduct(): void {
     this.selectedProduct = null;
+    this.selectedProductColorIndex = 0;
     this.selectedProductImageSide = 'front';
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
   }
 
   selectProductImageSide(side: 'front' | 'back'): void {
-    if (side === 'back' && !this.selectedProduct?.imageBack) {
+    if (side === 'back' && !this.selectedProductColor()?.imageBack) {
       return;
     }
 
     this.selectedProductImageSide = side;
+  }
+
+  selectProductColor(index: number): void {
+    const colors = this.selectedProductColors();
+
+    if (!colors[index]) {
+      return;
+    }
+
+    this.selectedProductColorIndex = index;
+
+    if (this.selectedProductImageSide === 'back' && !colors[index].imageBack) {
+      this.selectedProductImageSide = 'front';
+    }
+  }
+
+  selectedProductColors(): ProductColorVariation[] {
+    if (!this.selectedProduct) {
+      return [];
+    }
+
+    const colors = Array.isArray(this.selectedProduct.colors) ? this.selectedProduct.colors : [];
+    const validColors = colors.filter((variation) => variation.image || variation.imageBack || variation.color);
+
+    if (validColors.length > 0) {
+      return validColors;
+    }
+
+    return [{
+      id: this.selectedProduct.id || this.selectedProduct.name,
+      color: this.selectedProduct.color || 'Cor principal',
+      image: this.selectedProduct.image,
+      imageBack: this.selectedProduct.imageBack,
+    }];
+  }
+
+  selectedProductColor(): ProductColorVariation | null {
+    return this.selectedProductColors()[this.selectedProductColorIndex] || this.selectedProductColors()[0] || null;
   }
 
   selectedProductImage(): string {
@@ -218,11 +276,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return this.fallbackImage;
     }
 
-    if (this.selectedProductImageSide === 'back' && this.selectedProduct.imageBack) {
-      return this.selectedProduct.imageBack;
+    const selectedColor = this.selectedProductColor();
+
+    if (this.selectedProductImageSide === 'back' && selectedColor?.imageBack) {
+      return selectedColor.imageBack;
     }
 
-    return this.selectedProduct.image || this.fallbackImage;
+    return selectedColor?.image || this.selectedProduct.image || this.fallbackImage;
   }
 
   selectedProductImageAlt(): string {
@@ -231,7 +291,27 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
 
     const side = this.selectedProductImageSide === 'back' ? 'verso' : 'frente';
-    return `${this.selectedProduct.name} - ${side}`;
+    const color = this.selectedProductColor()?.color;
+    return `${this.selectedProduct.name}${color ? ` ${color}` : ''} - ${side}`;
+  }
+
+  selectedProductWithSelectedColor(): Product | null {
+    if (!this.selectedProduct) {
+      return null;
+    }
+
+    const variation = this.selectedProductColor();
+
+    if (!variation) {
+      return this.selectedProduct;
+    }
+
+    return {
+      ...this.selectedProduct,
+      color: variation.color || this.selectedProduct.color,
+      image: variation.image || this.selectedProduct.image,
+      imageBack: variation.imageBack || this.selectedProduct.imageBack,
+    };
   }
 
   goToCheckout(): void {
@@ -241,6 +321,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.cartOpen = false;
     this.selectedProduct = null;
+    this.selectedProductColorIndex = 0;
     this.selectedProductImageSide = 'front';
     this.isCheckoutView = true;
     this.checkoutStep = 'address';
@@ -253,6 +334,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   backToStore(): void {
     this.isCheckoutView = false;
     this.selectedProduct = null;
+    this.selectedProductColorIndex = 0;
     this.selectedProductImageSide = 'front';
     this.checkoutError = '';
     this.paymentStatus = '';
@@ -499,7 +581,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private getProductKey(product: Product): string {
-    return product.id || product.name;
+    return `${product.id || product.name}::${product.color || ''}`;
   }
 
   private isAddressValid(): boolean {

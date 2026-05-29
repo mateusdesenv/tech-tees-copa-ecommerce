@@ -181,27 +181,46 @@
   </header>
 
   <section class="product-detail-shell">
-    <div class="product-detail-media">
-      <img
-        [src]="normalizeImagePath(selectedProductImage())"
-        [alt]="selectedProductImageAlt()"
-        (error)="setFallbackImage($event)"
-      />
-      <div class="product-image-switcher">
+    <div class="product-detail-gallery">
+      <div class="product-detail-media">
+        <img
+          [src]="normalizeImagePath(selectedProductImage())"
+          [alt]="selectedProductImageAlt()"
+          (error)="setFallbackImage($event)"
+        />
+        <div class="product-image-switcher">
+          <button
+            type="button"
+            [class.active]="selectedProductImageSide === 'front'"
+            (click)="selectProductImageSide('front')"
+          >
+            Frente
+          </button>
+          <button
+            type="button"
+            [class.active]="selectedProductImageSide === 'back'"
+            [disabled]="!selectedProductColor()?.imageBack"
+            (click)="selectProductImageSide('back')"
+          >
+            Verso
+          </button>
+        </div>
+      </div>
+
+      <div class="product-color-thumbs" *ngIf="selectedProductColors().length > 1">
         <button
           type="button"
-          [class.active]="selectedProductImageSide === 'front'"
-          (click)="selectProductImageSide('front')"
+          *ngFor="let variation of selectedProductColors(); let index = index"
+          [class.active]="selectedProductColorIndex === index"
+          [attr.aria-label]="'Selecionar cor ' + variation.color"
+          (click)="selectProductColor(index)"
         >
-          Frente
-        </button>
-        <button
-          type="button"
-          [class.active]="selectedProductImageSide === 'back'"
-          [disabled]="!selectedProduct.imageBack"
-          (click)="selectProductImageSide('back')"
-        >
-          Verso
+          <img
+            [src]="normalizeImagePath(variation.image || variation.imageBack)"
+            [alt]="selectedProduct.name + ' ' + variation.color"
+            (error)="setFallbackImage($event)"
+          />
+          <span>{{ variation.color }}</span>
         </button>
       </div>
     </div>
@@ -209,6 +228,7 @@
     <article class="product-detail-info">
       <span class="product-detail-kicker">{{ selectedProduct.category || 'Tech-Tees Brasil' }}</span>
       <h1>{{ selectedProduct.name }}</h1>
+      <span class="selected-color-label" *ngIf="selectedProductColor()?.color">{{ selectedProductColor()?.color }}</span>
       <p class="product-detail-price">{{ formatCurrency(selectedProduct.price) }}</p>
       <p class="product-detail-copy">
         Camiseta premium da coleção Copa do Mundo, criada para combinar estética de futebol, cultura brasileira e streetwear minimalista.
@@ -230,10 +250,10 @@
       </div>
 
       <div class="product-detail-actions">
-        <button class="checkout-primary" type="button" (click)="addToCart(selectedProduct)">
-          {{ productCartQuantity(selectedProduct) ? 'Adicionar mais uma' : 'Adicionar ao carrinho' }}
+        <button class="checkout-primary" type="button" (click)="addSelectedProductToCart()">
+          {{ productCartQuantity(selectedProductWithSelectedColor() || selectedProduct) ? 'Adicionar mais uma' : 'Adicionar ao carrinho' }}
         </button>
-        <button class="detail-secondary" type="button" (click)="addToCart(selectedProduct); goToCheckout()">
+        <button class="detail-secondary" type="button" (click)="addSelectedProductToCart(); goToCheckout()">
           Comprar agora
         </button>
       </div>
@@ -362,6 +382,7 @@
           <img [src]="normalizeImagePath(item.product.image)" [alt]="item.product.name" (error)="setFallbackImage($event)" />
           <div>
             <strong>{{ item.product.name }}</strong>
+            <small *ngIf="item.product.color">{{ item.product.color }}</small>
             <span>Qtd. {{ item.quantity }}</span>
           </div>
           <p>{{ formatCurrency(itemTotal(item)) }}</p>
@@ -421,6 +442,7 @@
       />
       <div class="cart-item-info">
         <h3>{{ item.product.name }}</h3>
+        <small *ngIf="item.product.color">{{ item.product.color }}</small>
         <p>{{ formatCurrency(item.product.price) }}</p>
         <div class="cart-quantity">
           <button type="button" aria-label="Diminuir quantidade" (click)="decreaseCartItem(item)">−</button>
