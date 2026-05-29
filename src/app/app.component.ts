@@ -128,6 +128,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   checkoutError = '';
   paymentStatus = '';
   isCheckingOut = false;
+  hoverCarouselTick = 0;
   readonly addressForm: AddressForm = {
     fullName: '',
     cpf: '',
@@ -143,6 +144,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private scrollHandler?: () => void;
   private resizeHandler?: () => void;
+  private hoverCarouselProductKey = '';
+  private hoverCarouselIntervalId?: number;
   private cardPaymentBrickController: MercadoPagoBrickController | null = null;
 
   ngAfterViewInit(): void {
@@ -158,6 +161,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
+    }
+
+    if (this.hoverCarouselIntervalId) {
+      window.clearInterval(this.hoverCarouselIntervalId);
     }
   }
 
@@ -186,6 +193,54 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const image = event.target as HTMLImageElement;
     image.onerror = null;
     image.src = this.fallbackImage;
+  }
+
+  productCardCarouselImages(product: Product): string[] {
+    const variationImages = Array.isArray(product.colors)
+      ? product.colors.map((variation) => variation.image).filter((image): image is string => Boolean(String(image || '').trim()))
+      : [];
+    const images = variationImages.length > 0 ? variationImages : [product.image || this.fallbackImage];
+
+    return Array.from(new Set(images));
+  }
+
+  productCardCarouselImage(product: Product, cardIndex: number): string {
+    const images = this.productCardCarouselImages(product);
+    return images[this.productCardCarouselIndex(product, cardIndex)] || this.fallbackImage;
+  }
+
+  productCardCarouselIndex(product: Product, cardIndex: number): number {
+    const images = this.productCardCarouselImages(product);
+    const productKey = this.getProductKey(product);
+
+    if (images.length <= 1 || this.hoverCarouselProductKey !== productKey) {
+      return 0;
+    }
+
+    return (this.hoverCarouselTick + cardIndex) % images.length;
+  }
+
+  startProductCardCarousel(product: Product): void {
+    if (this.reducedMotion || this.productCardCarouselImages(product).length <= 1) {
+      return;
+    }
+
+    this.stopProductCardCarousel();
+    this.hoverCarouselProductKey = this.getProductKey(product);
+    this.hoverCarouselTick = 1;
+    this.hoverCarouselIntervalId = window.setInterval(() => {
+      this.hoverCarouselTick += 1;
+    }, 1500);
+  }
+
+  stopProductCardCarousel(): void {
+    if (this.hoverCarouselIntervalId) {
+      window.clearInterval(this.hoverCarouselIntervalId);
+      this.hoverCarouselIntervalId = undefined;
+    }
+
+    this.hoverCarouselProductKey = '';
+    this.hoverCarouselTick = 0;
   }
 
   addToCart(product: Product): void {

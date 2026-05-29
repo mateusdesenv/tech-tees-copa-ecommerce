@@ -42,16 +42,28 @@
         tabindex="0"
         role="button"
         [attr.aria-label]="'Ver detalhes de ' + product.name"
+        (mouseenter)="startProductCardCarousel(product)"
+        (mouseleave)="stopProductCardCarousel()"
+        (focusin)="startProductCardCarousel(product)"
+        (focusout)="stopProductCardCarousel()"
         (click)="openProduct(product)"
         (keydown.enter)="openProduct(product)"
       >
-        <div class="product-media">
+        <div class="product-media product-carousel-media">
           <img
-            [src]="normalizeImagePath(product.image)"
-            [alt]="product.name"
+            *ngFor="let image of productCardCarouselImages(product); let imageIndex = index"
+            [src]="normalizeImagePath(image)"
+            [alt]="product.name + ' variação ' + (imageIndex + 1)"
+            [class.active]="productCardCarouselIndex(product, index) === imageIndex"
             loading="lazy"
             (error)="setFallbackImage($event)"
           />
+          <div class="product-carousel-dots" *ngIf="productCardCarouselImages(product).length > 1" aria-hidden="true">
+            <span
+              *ngFor="let image of productCardCarouselImages(product); let imageIndex = index"
+              [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+            ></span>
+          </div>
         </div>
         <div class="product-info">
           <h3>{{ product.name }}</h3>
