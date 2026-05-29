@@ -49,6 +49,7 @@ interface Product {
   color?: string;
   colors?: ProductColorVariation[];
   category?: string;
+  description?: string;
   sales?: number;
   status?: string;
 }
