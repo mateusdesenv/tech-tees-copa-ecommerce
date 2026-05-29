@@ -1,4 +1,4 @@
-<main *ngIf="!isCheckoutView">
+<main *ngIf="!isCheckoutView && !selectedProduct">
   <section class="hero" data-parallax="hero">
     <img src="assets/banner-hero.webp" alt="Banner principal Tech-Tees Copa do Mundo Brasil" data-parallax-layer="hero" />
   </section>
@@ -36,9 +36,14 @@
       </p>
 
       <article
-        class="product-card"
+        class="product-card clickable"
         *ngFor="let product of activeProducts; let index = index"
         [style.--card-delay.ms]="index * 70"
+        tabindex="0"
+        role="button"
+        [attr.aria-label]="'Ver detalhes de ' + product.name"
+        (click)="openProduct(product)"
+        (keydown.enter)="openProduct(product)"
       >
         <div class="product-media">
           <img
@@ -53,7 +58,7 @@
           <p>{{ formatCurrency(product.price) }}</p>
           <small>{{ product.category }} · {{ product.sales || 0 }} vendas</small>
           <div class="swatches"><span></span><span></span></div>
-          <button class="add-to-cart" type="button" (click)="addToCart(product)">
+          <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addToCart(product)">
             <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
             <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
           </button>
@@ -141,7 +146,7 @@
   </section>
 </main>
 
-<footer class="footer reveal" *ngIf="!isCheckoutView">
+<footer class="footer reveal" *ngIf="!isCheckoutView && !selectedProduct">
   <div>
     <strong>TECH-TEES</strong>
     <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
@@ -166,7 +171,81 @@
   </div>
 </footer>
 
-<div class="copyright" *ngIf="!isCheckoutView">© 2026 TECH-TEES. Todos os direitos reservados.</div>
+<div class="copyright" *ngIf="!isCheckoutView && !selectedProduct">© 2026 TECH-TEES. Todos os direitos reservados.</div>
+
+<main class="product-detail-page" *ngIf="selectedProduct && !isCheckoutView">
+  <header class="product-detail-topbar">
+    <button type="button" (click)="closeProduct()">← Voltar para coleção</button>
+    <strong>TECH-TEES</strong>
+    <button type="button" (click)="openCart()">Carrinho {{ cartQuantity() ? '(' + cartQuantity() + ')' : '' }}</button>
+  </header>
+
+  <section class="product-detail-shell">
+    <div class="product-detail-media">
+      <img
+        [src]="normalizeImagePath(selectedProductImage())"
+        [alt]="selectedProductImageAlt()"
+        (error)="setFallbackImage($event)"
+      />
+      <div class="product-image-switcher">
+        <button
+          type="button"
+          [class.active]="selectedProductImageSide === 'front'"
+          (click)="selectProductImageSide('front')"
+        >
+          Frente
+        </button>
+        <button
+          type="button"
+          [class.active]="selectedProductImageSide === 'back'"
+          [disabled]="!selectedProduct.imageBack"
+          (click)="selectProductImageSide('back')"
+        >
+          Verso
+        </button>
+      </div>
+    </div>
+
+    <article class="product-detail-info">
+      <span class="product-detail-kicker">{{ selectedProduct.category || 'Tech-Tees Brasil' }}</span>
+      <h1>{{ selectedProduct.name }}</h1>
+      <p class="product-detail-price">{{ formatCurrency(selectedProduct.price) }}</p>
+      <p class="product-detail-copy">
+        Camiseta premium da coleção Copa do Mundo, criada para combinar estética de futebol, cultura brasileira e streetwear minimalista.
+      </p>
+
+      <div class="product-detail-meta">
+        <div>
+          <span>Vendas</span>
+          <strong>{{ selectedProduct.sales || 0 }}</strong>
+        </div>
+        <div>
+          <span>Entrega</span>
+          <strong>{{ cartTotal() >= 199 ? 'Grátis' : 'Brasil' }}</strong>
+        </div>
+        <div>
+          <span>Pagamento</span>
+          <strong>Seguro</strong>
+        </div>
+      </div>
+
+      <div class="product-detail-actions">
+        <button class="checkout-primary" type="button" (click)="addToCart(selectedProduct)">
+          {{ productCartQuantity(selectedProduct) ? 'Adicionar mais uma' : 'Adicionar ao carrinho' }}
+        </button>
+        <button class="detail-secondary" type="button" (click)="addToCart(selectedProduct); goToCheckout()">
+          Comprar agora
+        </button>
+      </div>
+
+      <div class="product-detail-notes">
+        <p>Modelagem streetwear com visual premium.</p>
+        <p>Troca fácil em até 7 dias.</p>
+        <p>Checkout protegido por Mercado Pago.</p>
+      </div>
+    </article>
+  </section>
+</main>
 
 <main class="checkout-page" *ngIf="isCheckoutView">
   <header class="checkout-topbar">

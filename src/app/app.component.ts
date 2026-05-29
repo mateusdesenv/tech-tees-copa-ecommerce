@@ -45,6 +45,7 @@ interface Product {
   name: string;
   price: number | string;
   image?: string;
+  imageBack?: string;
   category?: string;
   sales?: number;
   status?: string;
@@ -88,7 +89,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
 
-  readonly apiBaseUrl = 'https://tech-tees-admin-api.vercel.app';
+  readonly apiBaseUrl = 'http://localhost:3000';
   readonly mercadoPagoPublicKey = 'TEST-4795ac8f-4a54-47c9-858f-de6c007ca6cf';
   readonly storeName = 'Copa do mundo';
   readonly storeSlug = 'copa-do-mundo';
@@ -99,6 +100,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   catalogTone: 'error' | '' = '';
   products: Product[] = [];
   activeProducts: Product[] = [];
+  selectedProduct: Product | null = null;
+  selectedProductImageSide: 'front' | 'back' = 'front';
   featuredProduct: Product | null = null;
   editorialProducts: Array<Product | null> = [null, null];
   lookbookProducts: Array<Product | null> = [null, null, null, null];
@@ -187,12 +190,58 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.lastAddedProductName = product.name;
   }
 
+  openProduct(product: Product): void {
+    this.selectedProduct = product;
+    this.selectedProductImageSide = 'front';
+    this.cartOpen = false;
+    this.isCheckoutView = false;
+    this.resetPaymentBrick();
+    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  closeProduct(): void {
+    this.selectedProduct = null;
+    this.selectedProductImageSide = 'front';
+    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  selectProductImageSide(side: 'front' | 'back'): void {
+    if (side === 'back' && !this.selectedProduct?.imageBack) {
+      return;
+    }
+
+    this.selectedProductImageSide = side;
+  }
+
+  selectedProductImage(): string {
+    if (!this.selectedProduct) {
+      return this.fallbackImage;
+    }
+
+    if (this.selectedProductImageSide === 'back' && this.selectedProduct.imageBack) {
+      return this.selectedProduct.imageBack;
+    }
+
+    return this.selectedProduct.image || this.fallbackImage;
+  }
+
+  selectedProductImageAlt(): string {
+    if (!this.selectedProduct) {
+      return 'Produto Tech-Tees';
+    }
+
+    const side = this.selectedProductImageSide === 'back' ? 'verso' : 'frente';
+    return `${this.selectedProduct.name} - ${side}`;
+  }
+
   goToCheckout(): void {
     if (!this.cartItems.length) {
       return;
     }
 
     this.cartOpen = false;
+    this.selectedProduct = null;
+    this.selectedProductImageSide = 'front';
     this.isCheckoutView = true;
     this.checkoutStep = 'address';
     this.checkoutError = '';
@@ -203,6 +252,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   backToStore(): void {
     this.isCheckoutView = false;
+    this.selectedProduct = null;
+    this.selectedProductImageSide = 'front';
     this.checkoutError = '';
     this.paymentStatus = '';
     this.resetPaymentBrick();
