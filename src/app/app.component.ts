@@ -39,6 +39,7 @@ interface StoreResponse {
   id: string;
   name?: string;
   slug?: string;
+  defaultShipping?: number;
 }
 
 interface Product {
@@ -111,6 +112,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   catalogTone: 'error' | '' = '';
   products: Product[] = [];
   activeProducts: Product[] = [];
+  activeStore: StoreResponse | null = null;
   selectedProduct: Product | null = null;
   selectedProductColorIndex = 0;
   selectedProductImageSide: 'front' | 'back' = 'front';
@@ -444,7 +446,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return 0;
     }
 
-    return 19.9;
+    return Number(this.activeStore?.defaultShipping ?? 19.9);
   }
 
   orderTotal(): number {
@@ -539,6 +541,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             image: item.product.image,
           })),
           shipping: this.shipping(),
+          storeId: this.activeStore?.id,
         }),
       );
 
@@ -579,6 +582,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
+      this.activeStore = store;
       const products = await firstValueFrom(
         this.http.get<Product[]>(`${this.apiBaseUrl}/products?storeId=${encodeURIComponent(store.id)}`),
       );
@@ -615,6 +619,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private showMessage(message: string, tone: 'error' | '' = ''): void {
     this.loading = false;
+    this.activeStore = null;
     this.activeProducts = [];
     this.catalogMessage = message;
     this.catalogTone = tone;
