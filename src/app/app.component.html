@@ -1,6 +1,56 @@
 <main *ngIf="!isCheckoutView && !selectedProduct">
-  <section class="hero" data-parallax="hero">
-    <img src="assets/banner-hero.webp" alt="Banner principal Tech-Tees Copa do Mundo Brasil" data-parallax-layer="hero" />
+  <header class="site-header">
+    <a class="site-logo" href="#inicio" aria-label="Tech Tees Brasil - início">
+      <span class="site-logo-mark" aria-hidden="true">♛</span>
+      <strong>TECH TEES</strong>
+      <small>BRASIL</small>
+    </a>
+
+    <nav class="site-nav" aria-label="Navegação principal">
+      <a href="#inicio">Início</a>
+      <a href="#shop">Coleção</a>
+      <a href="#manifesto">Sobre</a>
+      <a href="#contact">Contato</a>
+    </nav>
+
+    <div class="site-actions">
+      <a class="header-icon-button" href="#shop" aria-label="Buscar produtos">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.4-3.4"></path>
+        </svg>
+      </a>
+      <button class="header-icon-button header-cart-button" type="button" aria-label="Abrir carrinho" (click)="openCart()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 8h12l1 12H5L6 8Z"></path>
+          <path d="M9 9V6a3 3 0 0 1 6 0v3"></path>
+        </svg>
+        <strong *ngIf="cartQuantity()">{{ cartQuantity() }}</strong>
+      </button>
+    </div>
+  </header>
+
+  <section id="inicio" class="hero" data-parallax="hero">
+    <div class="hero-shell">
+      <div class="hero-copy">
+        <p class="hero-kicker">Drop 01 · Brasil 2026</p>
+        <h1>
+          <span>Futebol<i>.</i></span>
+          <span>Cultura<i>.</i></span>
+          <span>Identidade<i>.</i></span>
+        </h1>
+        <p class="hero-description">Coleção exclusiva inspirada na maior paixão do mundo.</p>
+        <a class="hero-cta" href="#shop">Ver coleção</a>
+      </div>
+
+      <div class="hero-visual">
+        <img
+          src="assets/imagem-banner-hero.png"
+          alt="Quatro camisetas da coleção Brasil Tech Tees"
+          data-parallax-layer="hero"
+        />
+      </div>
+    </div>
   </section>
 
   <section class="benefits reveal">
@@ -158,7 +208,7 @@
   </section>
 </main>
 
-<footer class="footer reveal" *ngIf="!isCheckoutView && !selectedProduct">
+<footer id="contact" class="footer reveal" *ngIf="!isCheckoutView && !selectedProduct">
   <div>
     <strong>TECH-TEES</strong>
     <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
