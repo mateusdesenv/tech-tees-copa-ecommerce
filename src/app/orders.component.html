@@ -1,0 +1,100 @@
+<main class="customer-page">
+  <header class="customer-topbar">
+    <a routerLink="/">← Voltar para a loja</a>
+    <strong>TECH TEES</strong>
+    <a routerLink="/minha-conta">Minha conta</a>
+  </header>
+
+  <section class="customer-shell orders-shell">
+    <div class="customer-heading">
+      <span>Histórico</span>
+      <h1>Minhas compras.</h1>
+      <p>Acompanhe seus pedidos mais recentes e consulte os itens de cada compra.</p>
+    </div>
+
+    <div class="orders-loading" *ngIf="loading" aria-label="Carregando pedidos">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+
+    <article class="orders-error" *ngIf="!loading && errorMessage">
+      <h2>Não foi possível carregar seus pedidos.</h2>
+      <p>Tente novamente.</p>
+    </article>
+
+    <article class="orders-empty" *ngIf="!loading && !errorMessage && !orders.length">
+      <span aria-hidden="true">TT</span>
+      <h2>Você ainda não possui compras.</h2>
+      <p>Explore a coleção Brasil e encontre sua próxima camiseta.</p>
+      <a routerLink="/">Ver coleção</a>
+    </article>
+
+    <div class="orders-table-wrap" *ngIf="!loading && !errorMessage && orders.length">
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>Número do pedido</th>
+            <th>Data</th>
+            <th>Itens</th>
+            <th>Valor total</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let order of orders">
+            <td data-label="Pedido"><strong>#{{ order.id }}</strong></td>
+            <td data-label="Data">{{ formatDate(order.createdAt) }}</td>
+            <td data-label="Itens">{{ itemQuantity(order) }}</td>
+            <td data-label="Total"><strong>{{ formatCurrency(order.total) }}</strong></td>
+            <td data-label="Status">
+              <span class="order-status" [attr.data-status]="order.status">{{ statusLabel(order.status) }}</span>
+            </td>
+            <td data-label="Ações">
+              <button type="button" class="order-details-button" (click)="openDetails(order)">Ver detalhes</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="order-modal-backdrop" *ngIf="selectedOrder" (click)="closeDetails()"></div>
+<section class="order-modal" *ngIf="selectedOrder as order" role="dialog" aria-modal="true" aria-labelledby="order-title">
+  <header>
+    <div>
+      <span>Detalhes do pedido</span>
+      <h2 id="order-title">#{{ order.id }}</h2>
+    </div>
+    <button type="button" aria-label="Fechar detalhes" (click)="closeDetails()">×</button>
+  </header>
+
+  <div class="order-modal-meta">
+    <div><span>Data</span><strong>{{ formatDate(order.createdAt) }}</strong></div>
+    <div><span>Status</span><strong class="order-status" [attr.data-status]="order.status">{{ statusLabel(order.status) }}</strong></div>
+    <div><span>Total</span><strong>{{ formatCurrency(order.total) }}</strong></div>
+  </div>
+
+  <div class="order-product-list">
+    <article *ngFor="let item of order.items">
+      <div class="order-product-copy">
+        <strong>{{ item.name }}</strong>
+        <span>Quantidade: {{ item.quantity }}</span>
+        <span *ngIf="item.color">Cor: {{ item.color }}</span>
+        <span *ngIf="item.size">Tamanho: {{ item.size }}</span>
+        <span *ngIf="item.gender">Gênero: {{ item.gender }}</span>
+      </div>
+      <div>
+        <span>Valor unitário</span>
+        <strong>{{ formatCurrency(item.price) }}</strong>
+      </div>
+    </article>
+  </div>
+
+  <footer>
+    <span>Valor total do pedido</span>
+    <strong>{{ formatCurrency(order.total) }}</strong>
+  </footer>
+</section>

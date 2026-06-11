@@ -27,6 +27,20 @@ const storeSlug = String(
   fileEnv.TECH_TEES_STORE_SLUG ||
   'copa-do-mundo',
 ).trim();
+const pixelId = String(
+  process.env.PIXEL_ID ||
+  fileEnv.PIXEL_ID ||
+  '',
+).trim();
+const firebase = {
+  apiKey: envValue('FIREBASE_API_KEY'),
+  authDomain: envValue('FIREBASE_AUTH_DOMAIN'),
+  projectId: envValue('FIREBASE_PROJECT_ID'),
+  storageBucket: envValue('FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: envValue('FIREBASE_MESSAGING_SENDER_ID'),
+  appId: envValue('FIREBASE_APP_ID'),
+  measurementId: envValue('FIREBASE_MEASUREMENT_ID'),
+};
 
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(
@@ -36,9 +50,15 @@ writeFileSync(
   mercadoPagoPublicKey: ${JSON.stringify(mercadoPagoPublicKey)},
   storeName: ${JSON.stringify(storeName)},
   storeSlug: ${JSON.stringify(storeSlug)},
+  pixelId: ${JSON.stringify(pixelId)},
+  firebase: ${JSON.stringify(firebase, null, 2)},
 };
 `,
 );
+
+function envValue(key) {
+  return String(process.env[key] || fileEnv[key] || '').trim();
+}
 
 function readEnvFile(path) {
   try {

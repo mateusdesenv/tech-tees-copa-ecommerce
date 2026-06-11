@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cadastro",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/checkout",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/minha-conta",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/minhas-compras",
+      "destination": "/index.html"
+    }
+  ]
+}

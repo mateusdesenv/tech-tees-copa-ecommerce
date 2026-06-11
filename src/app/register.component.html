@@ -1,0 +1,49 @@
+<main class="auth-page">
+  <a class="auth-brand" routerLink="/" aria-label="Voltar para Tech Tees">
+    <span>♛</span>
+    <strong>TECH TEES</strong>
+    <small>BRASIL</small>
+  </a>
+
+  <section class="auth-card">
+    <div class="auth-heading">
+      <span>Nova conta</span>
+      <h1>Faça parte do drop.</h1>
+      <p>Crie sua conta para concluir pedidos e acompanhar suas compras.</p>
+    </div>
+
+    <p class="auth-alert" *ngIf="!firebaseConfigured">
+      Firebase Auth ainda não foi configurado neste ambiente.
+    </p>
+
+    <form (ngSubmit)="submit()" novalidate>
+      <label>
+        Nome
+        <input name="name" autocomplete="name" [(ngModel)]="name" [disabled]="loading" placeholder="Seu nome" />
+      </label>
+      <label>
+        E-mail
+        <input name="email" type="email" autocomplete="email" [(ngModel)]="email" [disabled]="loading" placeholder="voce@email.com" />
+      </label>
+      <label>
+        Senha
+        <input name="password" type="password" autocomplete="new-password" [(ngModel)]="password" [disabled]="loading" placeholder="Mínimo de 6 caracteres" />
+      </label>
+      <label>
+        Confirmar senha
+        <input name="passwordConfirmation" type="password" autocomplete="new-password" [(ngModel)]="passwordConfirmation" [disabled]="loading" placeholder="Repita sua senha" />
+      </label>
+
+      <p class="auth-error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <button class="auth-primary" type="submit" [disabled]="loading || !firebaseConfigured">
+        {{ loading ? 'Criando conta...' : 'Criar conta' }}
+      </button>
+    </form>
+
+    <p class="auth-switch">
+      Já tem uma conta?
+      <a routerLink="/login" [queryParams]="{ returnUrl: route.snapshot.queryParamMap.get('returnUrl') }">Entrar</a>
+    </p>
+  </section>
+</main>
