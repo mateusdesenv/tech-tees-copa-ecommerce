@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { User } from '@angular/fire/auth';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
+import { AuthService } from './auth.service';
 import { MetaPixelService } from './meta-pixel.service';
+import { OrderItem, OrderService } from './order.service';
 
 declare global {
   interface Window {
@@ -116,7 +119,7 @@ interface MercadoPagoPaymentResponse {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterOutlet],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
@@ -124,7 +127,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly metaPixel = inject(MetaPixelService);
-  private readonly router = inject(Router, { optional: true });
+  private readonly authService = inject(AuthService);
+  private readonly orderService = inject(OrderService);
+  private readonly router = inject(Router);
+  private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
@@ -145,10 +151,13 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   editorialProducts: Array<Product | null> = [null, null];
   lookbookProducts: Array<Product | null> = [null, null, null, null];
   skeletonItems = Array.from({ length: 8 });
-  cartItems: CartItem[] = [];
+  readonly user$ = this.authService.user$;
+  cartItems: CartItem[] = this.readStoredCart();
   lastAddedProductName = '';
   cartOpen = false;
+  accountMenuOpen = false;
   isCheckoutView = false;
+  isAuthRoute = false;
   checkoutStep: CheckoutStep = 'address';
   addressSubmitted = false;
   cepLoading = false;
@@ -185,10 +194,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.metaPixel.init();
+    this.syncViewWithRoute(this.router.url);
 
-    this.routerSubscription = this.router?.events
+    this.routerSubscription = this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
-      .subscribe(() => this.metaPixel.trackPageView());
+      .subscribe((event) => {
+        this.syncViewWithRoute(event.urlAfterRedirects);
+        this.metaPixel.trackPageView();
+      });
   }
 
   ngAfterViewInit(): void {
@@ -211,6 +224,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.routerSubscription?.unsubscribe();
+  }
+
+  @HostListener('document:click')
+  closeAccountMenu(): void {
+    this.accountMenuOpen = false;
   }
 
   formatCurrency(value: number | string): string {
@@ -316,6 +334,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cartItems = [...this.cartItems, { product, quantity: 1 }];
     }
 
+    this.persistCart();
     this.lastAddedProductName = product.name;
     this.metaPixel.trackEvent('AddToCart', this.productPixelParams(product));
   }
@@ -567,7 +586,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  goToCheckout(): void {
+  async goToCheckout(): Promise<void> {
     if (!this.cartItems.length) {
       return;
     }
@@ -577,34 +596,55 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    this.cartOpen = false;
-    this.selectedProduct = null;
-    this.selectedProductColorIndex = 0;
-    this.selectedProductImageSide = 'front';
-    this.isCheckoutView = true;
-    this.checkoutStep = 'address';
-    this.checkoutError = '';
-    this.paymentStatus = '';
-    this.resetPaymentBrick();
-    this.metaPixel.trackEvent('InitiateCheckout', {
-      value: this.orderTotal(),
-      currency: 'BRL',
-      num_items: this.cartQuantity(),
-    });
-    this.metaPixel.trackPageView();
-    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+    const user = await this.authService.waitForAuthState();
+
+    if (!user) {
+      this.cartOpen = false;
+      await this.router.navigate(['/login'], {
+        queryParams: {
+          returnUrl: '/checkout',
+          reason: 'checkout',
+        },
+      });
+      return;
+    }
+
+    await this.router.navigate(['/checkout']);
   }
 
   backToStore(): void {
-    this.isCheckoutView = false;
-    this.selectedProduct = null;
-    this.selectedProductColorIndex = 0;
-    this.selectedProductImageSide = 'front';
-    this.checkoutError = '';
-    this.paymentStatus = '';
-    this.resetPaymentBrick();
-    this.metaPixel.trackPageView();
-    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+    void this.router.navigate(['/']);
+  }
+
+  openLogin(): void {
+    void this.router.navigate(['/login']);
+  }
+
+  toggleAccountMenu(event: Event): void {
+    event.stopPropagation();
+    this.accountMenuOpen = !this.accountMenuOpen;
+  }
+
+  navigateToCustomerPage(path: '/minha-conta' | '/minhas-compras'): void {
+    this.accountMenuOpen = false;
+    void this.router.navigate([path]);
+  }
+
+  async logout(): Promise<void> {
+    this.accountMenuOpen = false;
+    await this.authService.logout();
+    await this.router.navigate(['/']);
+  }
+
+  userInitials(user: User): string {
+    const source = user.displayName || user.email || 'Tech Tees';
+    return source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase();
   }
 
   openCart(): void {
@@ -617,6 +657,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   increaseCartItem(item: CartItem): void {
     item.quantity += 1;
+    this.persistCart();
   }
 
   decreaseCartItem(item: CartItem): void {
@@ -626,16 +667,18 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     item.quantity -= 1;
+    this.persistCart();
   }
 
   removeCartItem(item: CartItem): void {
     const productKey = this.getProductKey(item.product);
     this.cartItems = this.cartItems.filter((cartItem) => this.getProductKey(cartItem.product) !== productKey);
+    this.persistCart();
 
     if (this.cartItems.length === 0) {
       this.closeCart();
-      this.isCheckoutView = false;
       this.resetPaymentBrick();
+      void this.router.navigate(['/']);
     }
   }
 
@@ -755,15 +798,52 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       );
 
       if (payment.status === 'approved') {
+        const purchaseValue = this.orderTotal();
+        const purchasedProductIds = this.cartItems.map((item) => this.productPixelId(item.product));
+        const purchasedItems: OrderItem[] = this.cartItems.map((item) => ({
+          productId: String(item.product.id || item.product.slug || item.product.sku || item.product.name),
+          name: item.product.name,
+          quantity: item.quantity,
+          price: Number(item.product.price || 0),
+          size: item.product.selectedSize,
+          gender: item.product.selectedGender,
+          color: item.product.color,
+          image: item.product.image,
+        }));
+        const user = this.authService.currentUser || await this.authService.waitForAuthState();
+
+        if (!user) {
+          throw new Error('Não foi possível identificar o usuário autenticado para salvar o pedido.');
+        }
+
+        try {
+          this.orderService.createOrder({
+            id: String(payment.externalReference || payment.id),
+            userId: user.uid,
+            items: purchasedItems,
+            total: purchaseValue,
+            status: 'paid',
+            paymentId: String(payment.id),
+            externalReference: payment.externalReference,
+          });
+        } catch {
+          this.paymentStatus = 'Pagamento aprovado, mas o pedido ainda não foi salvo no histórico.';
+          this.checkoutError = 'Não foi possível salvar o pedido. Seu carrinho foi preservado para recuperação.';
+          this.checkoutStep = 'confirmation';
+          this.resetPaymentBrick();
+          return;
+        }
+
         this.paymentStatus = 'Pagamento aprovado. Pedido recebido!';
         this.checkoutStep = 'confirmation';
         this.resetPaymentBrick();
         this.metaPixel.trackEvent('Purchase', {
-          value: this.orderTotal(),
+          value: purchaseValue,
           currency: 'BRL',
-          content_ids: this.cartItems.map((item) => this.productPixelId(item.product)),
+          content_ids: purchasedProductIds,
           content_type: 'product',
         });
+        this.clearCart();
         this.metaPixel.trackPageView();
         return;
       }
@@ -986,6 +1066,87 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private resetPaymentBrick(): void {
     this.cardPaymentBrickController?.unmount?.();
     this.cardPaymentBrickController = null;
+  }
+
+  private syncViewWithRoute(url: string): void {
+    const path = url.split('?')[0].split('#')[0];
+    const checkoutRoute = path === '/checkout';
+    const wasCheckoutView = this.isCheckoutView;
+
+    this.isAuthRoute = [
+      '/login',
+      '/cadastro',
+      '/minha-conta',
+      '/minhas-compras',
+    ].includes(path);
+    this.isCheckoutView = checkoutRoute;
+    this.accountMenuOpen = false;
+
+    if (checkoutRoute && !wasCheckoutView) {
+      this.cartOpen = false;
+      this.selectedProduct = null;
+      this.selectedProductColorIndex = 0;
+      this.selectedProductImageSide = 'front';
+      this.checkoutStep = 'address';
+      this.checkoutError = '';
+      this.paymentStatus = '';
+      this.resetPaymentBrick();
+      this.metaPixel.trackEvent('InitiateCheckout', {
+        value: this.orderTotal(),
+        currency: 'BRL',
+        num_items: this.cartQuantity(),
+      });
+    }
+
+    if (!checkoutRoute && wasCheckoutView) {
+      this.checkoutError = '';
+      this.paymentStatus = '';
+      this.resetPaymentBrick();
+    }
+
+    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  private readStoredCart(): CartItem[] {
+    try {
+      const value = window.localStorage.getItem(this.cartStorageKey);
+      const cart = value ? JSON.parse(value) as unknown : [];
+
+      if (!Array.isArray(cart)) {
+        return [];
+      }
+
+      return cart.filter((item): item is CartItem => {
+        if (!item || typeof item !== 'object') {
+          return false;
+        }
+
+        const candidate = item as Partial<CartItem>;
+        return Boolean(
+          candidate.product &&
+          typeof candidate.product === 'object' &&
+          Number.isFinite(Number(candidate.quantity)) &&
+          Number(candidate.quantity) > 0,
+        );
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  private persistCart(): void {
+    try {
+      window.localStorage.setItem(this.cartStorageKey, JSON.stringify(this.cartItems));
+    } catch {
+      // The cart remains usable in memory when browser storage is unavailable.
+    }
+  }
+
+  private clearCart(): void {
+    this.cartItems = [];
+    this.lastAddedProductName = '';
+    this.cartOpen = false;
+    this.persistCart();
   }
 
   private getErrorMessage(error: unknown): string {

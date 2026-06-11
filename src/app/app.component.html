@@ -1,4 +1,6 @@
-<main *ngIf="!isCheckoutView && !selectedProduct">
+<router-outlet></router-outlet>
+
+<main *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">
   <header class="site-header">
     <a class="site-logo" href="#inicio" aria-label="Tech Tees Brasil - início">
       <span class="site-logo-mark" aria-hidden="true">♛</span>
@@ -27,6 +29,26 @@
         </svg>
         <strong *ngIf="cartQuantity()">{{ cartQuantity() }}</strong>
       </button>
+      <ng-container *ngIf="user$ | async as user; else homeLoginButton">
+        <div class="account-menu" (click)="$event.stopPropagation()">
+          <button class="account-avatar" type="button" aria-label="Abrir menu da conta" (click)="toggleAccountMenu($event)">
+            <img *ngIf="user.photoURL; else homeUserInitials" [src]="user.photoURL" alt="" referrerpolicy="no-referrer" />
+            <ng-template #homeUserInitials>{{ userInitials(user) }}</ng-template>
+          </button>
+          <div class="account-popup" *ngIf="accountMenuOpen">
+            <div class="account-popup-user">
+              <strong>{{ user.displayName || 'Minha conta' }}</strong>
+              <small>{{ user.email }}</small>
+            </div>
+            <button type="button" (click)="navigateToCustomerPage('/minha-conta')">Minha conta</button>
+            <button type="button" (click)="navigateToCustomerPage('/minhas-compras')">Minhas compras</button>
+            <button type="button" class="account-logout" (click)="logout()">Sair</button>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #homeLoginButton>
+        <button class="header-login-button" type="button" (click)="openLogin()">Entrar</button>
+      </ng-template>
     </div>
   </header>
 
@@ -230,7 +252,7 @@
   </section>
 </main>
 
-<footer id="contact" class="footer reveal" *ngIf="!isCheckoutView && !selectedProduct">
+<footer id="contact" class="footer reveal" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">
   <div>
     <strong>TECH-TEES</strong>
     <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
@@ -255,13 +277,35 @@
   </div>
 </footer>
 
-<div class="copyright" *ngIf="!isCheckoutView && !selectedProduct">© 2026 TECH-TEES. Todos os direitos reservados.</div>
+<div class="copyright" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">© 2026 TECH-TEES. Todos os direitos reservados.</div>
 
-<main class="product-detail-page" *ngIf="selectedProduct && !isCheckoutView">
+<main class="product-detail-page" *ngIf="!isAuthRoute && selectedProduct && !isCheckoutView">
   <header class="product-detail-topbar">
     <button type="button" (click)="closeProduct()">← Voltar para coleção</button>
     <strong>TECH-TEES</strong>
-    <button type="button" (click)="openCart()">Carrinho {{ cartQuantity() ? '(' + cartQuantity() + ')' : '' }}</button>
+    <div class="detail-topbar-actions">
+      <button type="button" (click)="openCart()">Carrinho {{ cartQuantity() ? '(' + cartQuantity() + ')' : '' }}</button>
+      <ng-container *ngIf="user$ | async as user; else detailLoginButton">
+        <div class="account-menu" (click)="$event.stopPropagation()">
+          <button class="account-avatar small" type="button" aria-label="Abrir menu da conta" (click)="toggleAccountMenu($event)">
+            <img *ngIf="user.photoURL; else detailUserInitials" [src]="user.photoURL" alt="" referrerpolicy="no-referrer" />
+            <ng-template #detailUserInitials>{{ userInitials(user) }}</ng-template>
+          </button>
+          <div class="account-popup" *ngIf="accountMenuOpen">
+            <div class="account-popup-user">
+              <strong>{{ user.displayName || 'Minha conta' }}</strong>
+              <small>{{ user.email }}</small>
+            </div>
+            <button type="button" (click)="navigateToCustomerPage('/minha-conta')">Minha conta</button>
+            <button type="button" (click)="navigateToCustomerPage('/minhas-compras')">Minhas compras</button>
+            <button type="button" class="account-logout" (click)="logout()">Sair</button>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #detailLoginButton>
+        <button type="button" (click)="openLogin()">Entrar</button>
+      </ng-template>
+    </div>
   </header>
 
   <section class="product-detail-shell">
@@ -362,7 +406,7 @@
   </section>
 </main>
 
-<main class="checkout-page" *ngIf="isCheckoutView">
+<main class="checkout-page" *ngIf="!isAuthRoute && isCheckoutView">
   <header class="checkout-topbar">
     <button type="button" class="checkout-back" (click)="backToStore()">← Voltar</button>
     <strong>TECH-TEES</strong>
@@ -504,7 +548,7 @@
 
 <button
   class="floating-cart"
-  *ngIf="!isCheckoutView"
+  *ngIf="!isAuthRoute && !isCheckoutView"
   type="button"
   aria-label="Abrir carrinho"
   [class.has-items]="cartQuantity()"
@@ -514,9 +558,9 @@
   <strong *ngIf="cartQuantity()">{{ cartQuantity() }}</strong>
 </button>
 
-<div class="cart-backdrop" *ngIf="cartOpen" (click)="closeCart()"></div>
+<div class="cart-backdrop" *ngIf="!isAuthRoute && cartOpen" (click)="closeCart()"></div>
 
-<aside class="cart-drawer" [class.open]="cartOpen" aria-live="polite" aria-label="Carrinho de compras">
+<aside class="cart-drawer" *ngIf="!isAuthRoute" [class.open]="cartOpen" aria-live="polite" aria-label="Carrinho de compras">
   <header class="cart-drawer-head">
     <div>
       <span>Carrinho</span>

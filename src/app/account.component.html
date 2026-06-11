@@ -1,0 +1,34 @@
+<main class="customer-page">
+  <header class="customer-topbar">
+    <a routerLink="/">← Voltar para a loja</a>
+    <strong>TECH TEES</strong>
+    <a routerLink="/minhas-compras">Minhas compras</a>
+  </header>
+
+  <section class="customer-shell" *ngIf="user$ | async as user">
+    <div class="customer-heading">
+      <span>Minha conta</span>
+      <h1>Seus dados.</h1>
+      <p>Informações vinculadas à sua conta Tech Tees.</p>
+    </div>
+
+    <article class="profile-panel">
+      <div class="profile-avatar">
+        <img *ngIf="user.photoURL; else initials" [src]="user.photoURL" alt="" referrerpolicy="no-referrer" />
+        <ng-template #initials>{{ userInitials(user) }}</ng-template>
+      </div>
+      <div>
+        <span>Nome</span>
+        <strong>{{ user.displayName || 'Nome não informado' }}</strong>
+      </div>
+      <div>
+        <span>E-mail</span>
+        <strong>{{ user.email }}</strong>
+      </div>
+      <div>
+        <span>Conta</span>
+        <strong>{{ user.emailVerified ? 'E-mail verificado' : 'E-mail não verificado' }}</strong>
+      </div>
+    </article>
+  </section>
+</main>
