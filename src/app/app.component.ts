@@ -1,9 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { AfterViewInit, Component, ElementRef, OnDestroy, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
+import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
+import { MetaPixelService } from './meta-pixel.service';
 
 declare global {
   interface Window {
@@ -118,9 +120,11 @@ interface MercadoPagoPaymentResponse {
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
-export class AppComponent implements AfterViewInit, OnDestroy {
+export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly metaPixel = inject(MetaPixelService);
+  private readonly router = inject(Router, { optional: true });
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
@@ -177,6 +181,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private hoverCarouselIntervalId?: number;
   private cardPaymentBrickController: MercadoPagoBrickController | null = null;
   private readonly productCardImagesCache = new Map<string, string[]>();
+  private routerSubscription?: Subscription;
+
+  ngOnInit(): void {
+    this.metaPixel.init();
+
+    this.routerSubscription = this.router?.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe(() => this.metaPixel.trackPageView());
+  }
 
   ngAfterViewInit(): void {
     this.initScrollAnimations();
@@ -196,6 +209,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.hoverCarouselIntervalId) {
       window.clearInterval(this.hoverCarouselIntervalId);
     }
+
+    this.routerSubscription?.unsubscribe();
   }
 
   formatCurrency(value: number | string): string {
@@ -302,6 +317,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
 
     this.lastAddedProductName = product.name;
+    this.metaPixel.trackEvent('AddToCart', this.productPixelParams(product));
   }
 
   addCardProductToCart(product: Product): void {
@@ -438,6 +454,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cartOpen = false;
     this.isCheckoutView = false;
     this.resetPaymentBrick();
+    this.metaPixel.trackPageView();
+    this.metaPixel.trackEvent('ViewContent', this.productPixelParams(this.selectedProductWithSelectedColor() || product));
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
   }
 
@@ -445,6 +463,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.selectedProduct = null;
     this.selectedProductColorIndex = 0;
     this.selectedProductImageSide = 'front';
+    this.metaPixel.trackPageView();
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
   }
 
@@ -567,6 +586,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.checkoutError = '';
     this.paymentStatus = '';
     this.resetPaymentBrick();
+    this.metaPixel.trackEvent('InitiateCheckout', {
+      value: this.orderTotal(),
+      currency: 'BRL',
+      num_items: this.cartQuantity(),
+    });
+    this.metaPixel.trackPageView();
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
   }
 
@@ -578,6 +603,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.checkoutError = '';
     this.paymentStatus = '';
     this.resetPaymentBrick();
+    this.metaPixel.trackPageView();
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
   }
 
@@ -732,6 +758,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.paymentStatus = 'Pagamento aprovado. Pedido recebido!';
         this.checkoutStep = 'confirmation';
         this.resetPaymentBrick();
+        this.metaPixel.trackEvent('Purchase', {
+          value: this.orderTotal(),
+          currency: 'BRL',
+          content_ids: this.cartItems.map((item) => this.productPixelId(item.product)),
+          content_type: 'product',
+        });
+        this.metaPixel.trackPageView();
         return;
       }
 
@@ -739,6 +772,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.paymentStatus = 'Pagamento recebido e em análise.';
         this.checkoutStep = 'confirmation';
         this.resetPaymentBrick();
+        this.metaPixel.trackPageView();
         return;
       }
 
@@ -828,6 +862,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private getProductKey(product: Product): string {
     return `${this.getBaseProductKey(product)}::${product.colorId || product.color || ''}::${product.selectedSize || 'M'}::${product.selectedGender || 'Masculino'}`;
+  }
+
+  private productPixelId(product: Product): string {
+    return String(product.id || product.slug || product.sku || product.name);
+  }
+
+  private productPixelParams(product: Product): Record<string, unknown> {
+    return {
+      content_ids: [this.productPixelId(product)],
+      content_name: product.name,
+      content_type: 'product',
+      value: Number(product.price || 0),
+      currency: 'BRL',
+    };
   }
 
   private getBaseProductKey(product: Product): string {

@@ -27,6 +27,11 @@ const storeSlug = String(
   fileEnv.TECH_TEES_STORE_SLUG ||
   'copa-do-mundo',
 ).trim();
+const pixelId = String(
+  process.env.PIXEL_ID ||
+  fileEnv.PIXEL_ID ||
+  '',
+).trim();
 
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(
@@ -36,6 +41,7 @@ writeFileSync(
   mercadoPagoPublicKey: ${JSON.stringify(mercadoPagoPublicKey)},
   storeName: ${JSON.stringify(storeName)},
   storeSlug: ${JSON.stringify(storeSlug)},
+  pixelId: ${JSON.stringify(pixelId)},
 };
 `,
 );
