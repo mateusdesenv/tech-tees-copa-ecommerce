@@ -49,16 +49,35 @@ interface Product {
   image?: string;
   imageBack?: string;
   color?: string;
+  colorId?: string;
+  colorHex?: string;
+  colorRgb?: ColorRgb | null;
   colors?: ProductColorVariation[];
   category?: string;
   description?: string;
   sales?: number;
   status?: string;
+  sizes?: ProductSize[];
+  genders?: ProductGender[];
+  selectedSize?: ProductSize;
+  selectedGender?: ProductGender;
+}
+
+type ProductSize = 'P' | 'M' | 'G';
+type ProductGender = 'Masculino' | 'Feminino';
+
+interface ColorRgb {
+  r: number;
+  g: number;
+  b: number;
 }
 
 interface ProductColorVariation {
   id?: string;
   color: string;
+  colorId?: string;
+  colorHex?: string;
+  colorRgb?: ColorRgb | null;
   image?: string;
   imageBack?: string;
 }
@@ -132,6 +151,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   paymentStatus = '';
   isCheckingOut = false;
   hoverCarouselTick = 0;
+  cardColorSelection: Record<string, number> = {};
+  cardSizeSelection: Record<string, ProductSize> = {};
+  cardGenderSelection: Record<string, ProductGender> = {};
+  selectedProductSize: ProductSize = 'M';
+  selectedProductGender: ProductGender = 'Masculino';
+  readonly productSizes: ProductSize[] = ['P', 'M', 'G'];
+  readonly productGenders: ProductGender[] = ['Masculino', 'Feminino'];
   readonly addressForm: AddressForm = {
     fullName: '',
     cpf: '',
@@ -199,10 +225,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   productCardCarouselImages(product: Product): string[] {
-    const variationImages = Array.isArray(product.colors)
-      ? product.colors.map((variation) => variation.image).filter((image): image is string => Boolean(String(image || '').trim()))
-      : [];
-    const images = variationImages.length > 0 ? variationImages : [product.image || this.fallbackImage];
+    const selectedVariation = this.selectedCardColor(product);
+    const variationImages = this.productColors(product)
+      .map((variation) => variation.image)
+      .filter((image): image is string => Boolean(String(image || '').trim()));
+    const orderedImages = selectedVariation?.image
+      ? [selectedVariation.image, ...variationImages.filter((image) => image !== selectedVariation.image)]
+      : variationImages;
+    const images = orderedImages.length > 0 ? orderedImages : [product.image || this.fallbackImage];
 
     return Array.from(new Set(images));
   }
@@ -214,7 +244,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   productCardCarouselIndex(product: Product, cardIndex: number): number {
     const images = this.productCardCarouselImages(product);
-    const productKey = this.getProductKey(product);
+    const productKey = this.getBaseProductKey(product);
 
     if (images.length <= 1 || this.hoverCarouselProductKey !== productKey) {
       return 0;
@@ -229,7 +259,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
 
     this.stopProductCardCarousel();
-    this.hoverCarouselProductKey = this.getProductKey(product);
+    this.hoverCarouselProductKey = this.getBaseProductKey(product);
     this.hoverCarouselTick = 1;
     this.hoverCarouselIntervalId = window.setInterval(() => {
       this.hoverCarouselTick += 1;
@@ -259,6 +289,126 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.lastAddedProductName = product.name;
   }
 
+  addCardProductToCart(product: Product): void {
+    this.addToCart(this.productWithCardColor(product));
+  }
+
+  selectedCardSize(product: Product): ProductSize {
+    return this.cardSizeSelection[this.getBaseProductKey(product)] || 'M';
+  }
+
+  selectedCardGender(product: Product): ProductGender {
+    return this.cardGenderSelection[this.getBaseProductKey(product)] || 'Masculino';
+  }
+
+  selectCardSize(event: Event, product: Product, size: ProductSize): void {
+    event.stopPropagation();
+    this.cardSizeSelection = { ...this.cardSizeSelection, [this.getBaseProductKey(product)]: size };
+  }
+
+  selectCardGender(event: Event, product: Product, gender: ProductGender): void {
+    event.stopPropagation();
+    this.cardGenderSelection = { ...this.cardGenderSelection, [this.getBaseProductKey(product)]: gender };
+  }
+
+  productColors(product: Product): ProductColorVariation[] {
+    const variations = Array.isArray(product.colors)
+      ? product.colors.filter((variation) => variation.color || variation.colorId || variation.image || variation.imageBack)
+      : [];
+
+    if (variations.length > 0) {
+      return variations;
+    }
+
+    if (product.color || product.colorId || product.colorHex) {
+      return [{
+        id: product.id || product.name,
+        color: product.color || 'Cor principal',
+        colorId: product.colorId,
+        colorHex: product.colorHex,
+        colorRgb: product.colorRgb,
+        image: product.image,
+        imageBack: product.imageBack,
+      }];
+    }
+
+    return [];
+  }
+
+  visibleProductColors(product: Product): ProductColorVariation[] {
+    return this.productColors(product).slice(0, 6);
+  }
+
+  hiddenProductColorsCount(product: Product): number {
+    return Math.max(0, this.productColors(product).length - 6);
+  }
+
+  selectedCardColorIndex(product: Product): number {
+    const productKey = this.getBaseProductKey(product);
+    const selectedIndex = this.cardColorSelection[productKey] ?? 0;
+    return this.productColors(product)[selectedIndex] ? selectedIndex : 0;
+  }
+
+  selectedCardColor(product: Product): ProductColorVariation | null {
+    const colors = this.productColors(product);
+    return colors[this.selectedCardColorIndex(product)] || colors[0] || null;
+  }
+
+  selectCardColor(event: Event, product: Product, index: number): void {
+    event.stopPropagation();
+    const variation = this.productColors(product)[index];
+
+    if (!variation) {
+      return;
+    }
+
+    this.cardColorSelection = {
+      ...this.cardColorSelection,
+      [this.getBaseProductKey(product)]: index,
+    };
+    this.hoverCarouselTick = 0;
+  }
+
+  productColorBackground(variation: ProductColorVariation): string {
+    if (/^#[0-9a-f]{6}$/i.test(String(variation.colorHex || ''))) {
+      return String(variation.colorHex);
+    }
+
+    const rgb = variation.colorRgb;
+    return rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : 'transparent';
+  }
+
+  productColorHasVisual(variation: ProductColorVariation): boolean {
+    return Boolean(
+      /^#[0-9a-f]{6}$/i.test(String(variation.colorHex || ''))
+      || variation.colorRgb,
+    );
+  }
+
+  private productWithCardColor(product: Product): Product {
+    const variation = this.selectedCardColor(product);
+
+    if (!variation) {
+      return {
+        ...product,
+        selectedSize: this.selectedCardSize(product),
+        selectedGender: this.selectedCardGender(product),
+      };
+    }
+
+    return {
+      ...product,
+      color: variation.color || product.color,
+      colorId: variation.colorId || product.colorId,
+      colorHex: variation.colorHex || product.colorHex,
+      colorRgb: variation.colorRgb || product.colorRgb,
+      image: variation.image || product.image,
+      imageBack: variation.imageBack || product.imageBack,
+      selectedSize: this.selectedCardSize(product),
+      selectedGender: this.selectedCardGender(product),
+    };
+  }
+
   addSelectedProductToCart(): void {
     const product = this.selectedProductWithSelectedColor();
 
@@ -270,6 +420,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   openProduct(product: Product): void {
     this.selectedProduct = product;
     this.selectedProductColorIndex = 0;
+    this.selectedProductSize = 'M';
+    this.selectedProductGender = 'Masculino';
     this.selectedProductImageSide = 'front';
     this.cartOpen = false;
     this.isCheckoutView = false;
@@ -311,8 +463,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return [];
     }
 
-    const colors = Array.isArray(this.selectedProduct.colors) ? this.selectedProduct.colors : [];
-    const validColors = colors.filter((variation) => variation.image || variation.imageBack || variation.color);
+    const validColors = this.productColors(this.selectedProduct);
 
     if (validColors.length > 0) {
       return validColors;
@@ -321,6 +472,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return [{
       id: this.selectedProduct.id || this.selectedProduct.name,
       color: this.selectedProduct.color || 'Cor principal',
+      colorId: this.selectedProduct.colorId,
+      colorHex: this.selectedProduct.colorHex,
+      colorRgb: this.selectedProduct.colorRgb,
       image: this.selectedProduct.image,
       imageBack: this.selectedProduct.imageBack,
     }];
@@ -362,19 +516,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const variation = this.selectedProductColor();
 
     if (!variation) {
-      return this.selectedProduct;
+      return {
+        ...this.selectedProduct,
+        selectedSize: this.selectedProductSize,
+        selectedGender: this.selectedProductGender,
+      };
     }
 
     return {
       ...this.selectedProduct,
       color: variation.color || this.selectedProduct.color,
+      colorId: variation.colorId || this.selectedProduct.colorId,
+      colorHex: variation.colorHex || this.selectedProduct.colorHex,
+      colorRgb: variation.colorRgb || this.selectedProduct.colorRgb,
       image: variation.image || this.selectedProduct.image,
       imageBack: variation.imageBack || this.selectedProduct.imageBack,
+      selectedSize: this.selectedProductSize,
+      selectedGender: this.selectedProductGender,
     };
   }
 
   goToCheckout(): void {
     if (!this.cartItems.length) {
+      return;
+    }
+
+    if (!this.cartItems.every((item) => item.product.selectedSize && item.product.selectedGender)) {
+      this.checkoutError = 'Selecione tamanho e gênero para todos os itens.';
       return;
     }
 
@@ -454,7 +622,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   productCartQuantity(product: Product): number {
-    const productKey = this.getProductKey(product);
+    const productKey = this.getProductKey(this.productWithCardColor(product));
     return this.cartItems.find((item) => this.getProductKey(item.product) === productKey)?.quantity || 0;
   }
 
@@ -535,10 +703,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           },
           items: this.cartItems.map((item) => ({
             id: item.product.id || item.product.name,
-            title: item.product.name,
+            title: `${item.product.name}${item.product.color ? ` - ${item.product.color}` : ''}`,
             quantity: item.quantity,
             unit_price: Number(item.product.price || 0),
             image: item.product.image,
+            selectedColor: item.product.color || null,
+            selectedSize: item.product.selectedSize,
+            selectedGender: item.product.selectedGender,
           })),
           shipping: this.shipping(),
           storeId: this.activeStore?.id,
@@ -643,7 +814,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private getProductKey(product: Product): string {
-    return `${product.id || product.name}::${product.color || ''}`;
+    return `${this.getBaseProductKey(product)}::${product.colorId || product.color || ''}::${product.selectedSize || 'M'}::${product.selectedGender || 'Masculino'}`;
+  }
+
+  private getBaseProductKey(product: Product): string {
+    return String(product.id || product.name);
   }
 
   private isAddressValid(): boolean {

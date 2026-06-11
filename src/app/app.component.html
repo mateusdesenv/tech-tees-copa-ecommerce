@@ -63,8 +63,8 @@
   <section id="shop" class="section reveal">
     <div class="section-head">
       <div>
-        <span class="label dark">Drop 01</span>
-        <h2>Shop the collection</h2>
+        <span class="label dark"></span>
+        <h2>Coleção rumo ao hexa</h2>
       </div>
       <a href="#" class="view-all">Ver todos →</a>
     </div>
@@ -76,7 +76,7 @@
           <div class="product-info">
             <span class="skeleton-line title"></span>
             <span class="skeleton-line price"></span>
-            <div class="swatches"><span></span><span></span></div>
+            <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
           </div>
         </article>
       </ng-container>
@@ -118,9 +118,37 @@
         <div class="product-info">
           <h3>{{ product.name }}</h3>
           <p>{{ formatCurrency(product.price) }}</p>
-          <small>{{ product.category }} · {{ product.sales || 0 }} vendas</small>
-          <div class="swatches"><span></span><span></span></div>
-          <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addToCart(product)">
+          <small>{{ product.category }}</small>
+          <div class="product-colors" *ngIf="productColors(product).length">
+            <button
+              type="button"
+              class="color-swatch"
+              *ngFor="let variation of visibleProductColors(product); let colorIndex = index"
+              [class.selected]="selectedCardColorIndex(product) === colorIndex"
+              [class.no-color-value]="!productColorHasVisual(variation)"
+              [style.background]="productColorBackground(variation)"
+              [attr.title]="variation.color"
+              [attr.aria-label]="'Selecionar cor ' + variation.color"
+              (click)="selectCardColor($event, product, colorIndex)"
+            ></button>
+            <span class="more-colors" *ngIf="hiddenProductColorsCount(product)">+{{ hiddenProductColorsCount(product) }}</span>
+            <span class="legacy-color" *ngIf="selectedCardColor(product) && !productColorHasVisual(selectedCardColor(product)!)">
+              {{ selectedCardColor(product)?.color }}
+            </span>
+          </div>
+          <div class="product-option-row">
+            <span>Tamanho</span>
+            <div>
+              <button type="button" *ngFor="let size of productSizes" [class.selected]="selectedCardSize(product) === size" (click)="selectCardSize($event, product, size)">{{ size }}</button>
+            </div>
+          </div>
+          <div class="product-option-row">
+            <span>Gênero</span>
+            <div>
+              <button type="button" *ngFor="let gender of productGenders" [class.selected]="selectedCardGender(product) === gender" (click)="selectCardGender($event, product, gender)">{{ gender }}</button>
+            </div>
+          </div>
+          <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
             <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
             <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
           </button>
@@ -296,11 +324,22 @@
       </p>
       <p class="product-detail-price">{{ formatCurrency(selectedProduct.price) }}</p>
 
-      <div class="product-detail-meta">
+      <div class="detail-options">
         <div>
-          <span>Vendas</span>
-          <strong>{{ selectedProduct.sales || 0 }}</strong>
+          <span>Tamanho</span>
+          <div>
+            <button type="button" *ngFor="let size of productSizes" [class.selected]="selectedProductSize === size" (click)="selectedProductSize = size">{{ size }}</button>
+          </div>
         </div>
+        <div>
+          <span>Gênero</span>
+          <div>
+            <button type="button" *ngFor="let gender of productGenders" [class.selected]="selectedProductGender === gender" (click)="selectedProductGender = gender">{{ gender }}</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-detail-meta">
         <div>
           <span>Entrega</span>
           <strong>{{ cartTotal() >= 199 ? 'Grátis' : 'Brasil' }}</strong>
@@ -444,7 +483,9 @@
           <img [src]="normalizeImagePath(item.product.image)" [alt]="item.product.name" (error)="setFallbackImage($event)" />
           <div>
             <strong>{{ item.product.name }}</strong>
-            <small *ngIf="item.product.color">{{ item.product.color }}</small>
+            <small *ngIf="item.product.color">Cor: {{ item.product.color }}</small>
+            <small>Tamanho: {{ item.product.selectedSize }}</small>
+            <small>Gênero: {{ item.product.selectedGender }}</small>
             <span>Qtd. {{ item.quantity }}</span>
           </div>
           <p>{{ formatCurrency(itemTotal(item)) }}</p>
@@ -504,7 +545,9 @@
       />
       <div class="cart-item-info">
         <h3>{{ item.product.name }}</h3>
-        <small *ngIf="item.product.color">{{ item.product.color }}</small>
+        <small *ngIf="item.product.color">Cor: {{ item.product.color }}</small>
+        <small>Tamanho: {{ item.product.selectedSize }}</small>
+        <small>Gênero: {{ item.product.selectedGender }}</small>
         <p>{{ formatCurrency(item.product.price) }}</p>
         <div class="cart-quantity">
           <button type="button" aria-label="Diminuir quantidade" (click)="decreaseCartItem(item)">−</button>
