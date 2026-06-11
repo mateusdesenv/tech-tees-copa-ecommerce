@@ -154,8 +154,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   isCheckingOut = false;
   hoverCarouselTick = 0;
   cardColorSelection: Record<string, number> = {};
-  cardSizeSelection: Record<string, ProductSize> = {};
-  cardGenderSelection: Record<string, ProductGender> = {};
   selectedProductSize: ProductSize = 'M';
   selectedProductGender: ProductGender = 'Masculino';
   readonly productSizes: ProductSize[] = ['P', 'M', 'G'];
@@ -307,25 +305,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   addCardProductToCart(product: Product): void {
-    this.addToCart(this.productWithCardColor(product));
-  }
-
-  selectedCardSize(product: Product): ProductSize {
-    return this.cardSizeSelection[this.getBaseProductKey(product)] || 'M';
-  }
-
-  selectedCardGender(product: Product): ProductGender {
-    return this.cardGenderSelection[this.getBaseProductKey(product)] || 'Masculino';
-  }
-
-  selectCardSize(event: Event, product: Product, size: ProductSize): void {
-    event.stopPropagation();
-    this.cardSizeSelection = { ...this.cardSizeSelection, [this.getBaseProductKey(product)]: size };
-  }
-
-  selectCardGender(event: Event, product: Product, gender: ProductGender): void {
-    event.stopPropagation();
-    this.cardGenderSelection = { ...this.cardGenderSelection, [this.getBaseProductKey(product)]: gender };
+    this.addToCart(this.productWithCardDefaults(product));
   }
 
   productColors(product: Product): ProductColorVariation[] {
@@ -405,10 +385,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return variation.id || variation.colorId || variation.color || String(index);
   }
 
-  trackByValue(index: number, value: string): string {
-    return value || String(index);
-  }
-
   trackByIndex(index: number): number {
     return index;
   }
@@ -429,27 +405,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     );
   }
 
-  private productWithCardColor(product: Product): Product {
+  private productWithCardDefaults(product: Product): Product {
     const variation = this.selectedCardColor(product);
-
-    if (!variation) {
-      return {
-        ...product,
-        selectedSize: this.selectedCardSize(product),
-        selectedGender: this.selectedCardGender(product),
-      };
-    }
 
     return {
       ...product,
-      color: variation.color || product.color,
-      colorId: variation.colorId || product.colorId,
-      colorHex: variation.colorHex || product.colorHex,
-      colorRgb: variation.colorRgb || product.colorRgb,
-      image: variation.image || product.image,
-      imageBack: variation.imageBack || product.imageBack,
-      selectedSize: this.selectedCardSize(product),
-      selectedGender: this.selectedCardGender(product),
+      color: variation?.color || product.color,
+      colorId: variation?.colorId || product.colorId,
+      colorHex: variation?.colorHex || product.colorHex,
+      colorRgb: variation?.colorRgb || product.colorRgb,
+      image: variation?.image || product.image,
+      imageBack: variation?.imageBack || product.imageBack,
+      selectedSize: 'M',
+      selectedGender: 'Masculino',
     };
   }
 
@@ -463,7 +431,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   openProduct(product: Product): void {
     this.selectedProduct = product;
-    this.selectedProductColorIndex = 0;
+    this.selectedProductColorIndex = this.selectedCardColorIndex(product);
     this.selectedProductSize = 'M';
     this.selectedProductGender = 'Masculino';
     this.selectedProductImageSide = 'front';
@@ -666,7 +634,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   productCartQuantity(product: Product): number {
-    const productKey = this.getProductKey(this.productWithCardColor(product));
+    const productKey = this.getProductKey(this.productWithCardDefaults(product));
     return this.cartItems.find((item) => this.getProductKey(item.product) === productKey)?.quantity || 0;
   }
 
@@ -1012,7 +980,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         entry.target.classList.add('is-visible');
         observer.unobserve(entry.target);
       });
-    }, { threshold: 0.18 });
+    }, {
+      threshold: 0.03,
+      rootMargin: '0px 0px -8% 0px',
+    });
 
     elements.forEach((element) => observer.observe(element));
   }

@@ -78,8 +78,6 @@
             <span class="skeleton-line price"></span>
             <span class="skeleton-line category"></span>
             <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
-            <div class="skeleton-option-row"><span></span><i></i><i></i><i></i></div>
-            <div class="skeleton-option-row gender"><span></span><i></i><i></i></div>
             <span class="skeleton-button"></span>
           </div>
         </article>
@@ -143,18 +141,6 @@
             <span class="legacy-color" *ngIf="selectedCardColor(product) && !productColorHasVisual(selectedCardColor(product)!)">
               {{ selectedCardColor(product)?.color }}
             </span>
-          </div>
-          <div class="product-option-row">
-            <span>Tamanho</span>
-            <div>
-              <button type="button" *ngFor="let size of productSizes; trackBy: trackByValue" [class.selected]="selectedCardSize(product) === size" (click)="selectCardSize($event, product, size)">{{ size }}</button>
-            </div>
-          </div>
-          <div class="product-option-row">
-            <span>Gênero</span>
-            <div>
-              <button type="button" *ngFor="let gender of productGenders; trackBy: trackByValue" [class.selected]="selectedCardGender(product) === gender" (click)="selectCardGender($event, product, gender)">{{ gender }}</button>
-            </div>
           </div>
           <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
             <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
