@@ -44,6 +44,8 @@ interface StoreResponse {
 
 interface Product {
   id?: string;
+  slug?: string;
+  sku?: string;
   name: string;
   price: number | string;
   image?: string;
@@ -176,6 +178,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private hoverCarouselProductKey = '';
   private hoverCarouselIntervalId?: number;
   private cardPaymentBrickController: MercadoPagoBrickController | null = null;
+  private readonly productCardImagesCache = new Map<string, string[]>();
 
   ngAfterViewInit(): void {
     this.initScrollAnimations();
@@ -222,9 +225,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const image = event.target as HTMLImageElement;
     image.onerror = null;
     image.src = this.fallbackImage;
+    image.classList.add('is-loaded', 'is-fallback');
+  }
+
+  markImageLoaded(event: Event): void {
+    (event.target as HTMLImageElement).classList.add('is-loaded');
   }
 
   productCardCarouselImages(product: Product): string[] {
+    const cacheKey = `${this.getBaseProductKey(product)}::${this.selectedCardColorIndex(product)}`;
+    const cachedImages = this.productCardImagesCache.get(cacheKey);
+
+    if (cachedImages) {
+      return cachedImages;
+    }
+
     const selectedVariation = this.selectedCardColor(product);
     const variationImages = this.productColors(product)
       .map((variation) => variation.image)
@@ -234,7 +249,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       : variationImages;
     const images = orderedImages.length > 0 ? orderedImages : [product.image || this.fallbackImage];
 
-    return Array.from(new Set(images));
+    const uniqueImages = Array.from(new Set(images));
+    this.productCardImagesCache.set(cacheKey, uniqueImages);
+    return uniqueImages;
   }
 
   productCardCarouselImage(product: Product, cardIndex: number): string {
@@ -366,7 +383,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       ...this.cardColorSelection,
       [this.getBaseProductKey(product)]: index,
     };
+    this.clearProductCardImageCache(product);
     this.hoverCarouselTick = 0;
+  }
+
+  trackByProductId(index: number, product: Product): string {
+    return String(
+      product?.id
+      ?? product?.slug
+      ?? product?.sku
+      ?? product?.name
+      ?? `product-${index}`,
+    );
+  }
+
+  trackByImage(index: number, image: string): string {
+    return image || String(index);
+  }
+
+  trackByProductColor(index: number, variation: ProductColorVariation): string {
+    return variation.id || variation.colorId || variation.color || String(index);
+  }
+
+  trackByValue(index: number, value: string): string {
+    return value || String(index);
+  }
+
+  trackByIndex(index: number): number {
+    return index;
   }
 
   productColorBackground(variation: ProductColorVariation): string {
@@ -758,8 +802,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.http.get<Product[]>(`${this.apiBaseUrl}/products?storeId=${encodeURIComponent(store.id)}`),
       );
 
-      this.products = products;
-      this.activeProducts = products.filter((product) => product.status === 'active');
+      this.products = products.map((product, index) => this.normalizeProductIdentity(product, index));
+      this.activeProducts = this.products.filter((product) => product.status === 'active');
+      this.productCardImagesCache.clear();
 
       if (this.activeProducts.length === 0) {
         this.showMessage('Nenhuma camiseta ativa encontrada.');
@@ -818,7 +863,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private getBaseProductKey(product: Product): string {
-    return String(product.id || product.name);
+    return String(product.id || product.slug || product.sku || product.name);
+  }
+
+  private normalizeProductIdentity(product: Product, index: number): Product {
+    if (product.id) {
+      return product;
+    }
+
+    return {
+      ...product,
+      id: String(product.slug || product.sku || product.name || `product-${index}`),
+    };
+  }
+
+  private clearProductCardImageCache(product: Product): void {
+    const prefix = `${this.getBaseProductKey(product)}::`;
+
+    for (const key of this.productCardImagesCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.productCardImagesCache.delete(key);
+      }
+    }
   }
 
   private isAddressValid(): boolean {

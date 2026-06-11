@@ -71,12 +71,16 @@
 
     <div class="products-grid" id="productsGrid">
       <ng-container *ngIf="loading">
-        <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of skeletonItems">
+        <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of skeletonItems; trackBy: trackByIndex">
           <div class="product-media"></div>
           <div class="product-info">
             <span class="skeleton-line title"></span>
             <span class="skeleton-line price"></span>
+            <span class="skeleton-line category"></span>
             <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
+            <div class="skeleton-option-row"><span></span><i></i><i></i><i></i></div>
+            <div class="skeleton-option-row gender"><span></span><i></i><i></i></div>
+            <span class="skeleton-button"></span>
           </div>
         </article>
       </ng-container>
@@ -87,7 +91,7 @@
 
       <article
         class="product-card clickable"
-        *ngFor="let product of activeProducts; let index = index"
+        *ngFor="let product of activeProducts; let index = index; trackBy: trackByProductId"
         [style.--card-delay.ms]="index * 70"
         tabindex="0"
         role="button"
@@ -101,16 +105,20 @@
       >
         <div class="product-media product-carousel-media">
           <img
-            *ngFor="let image of productCardCarouselImages(product); let imageIndex = index"
+            *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
             [src]="normalizeImagePath(image)"
             [alt]="product.name + ' variação ' + (imageIndex + 1)"
             [class.active]="productCardCarouselIndex(product, index) === imageIndex"
             loading="lazy"
+            decoding="async"
+            width="800"
+            height="1000"
+            (load)="markImageLoaded($event)"
             (error)="setFallbackImage($event)"
           />
           <div class="product-carousel-dots" *ngIf="productCardCarouselImages(product).length > 1" aria-hidden="true">
             <span
-              *ngFor="let image of productCardCarouselImages(product); let imageIndex = index"
+              *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
               [class.active]="productCardCarouselIndex(product, index) === imageIndex"
             ></span>
           </div>
@@ -123,7 +131,7 @@
             <button
               type="button"
               class="color-swatch"
-              *ngFor="let variation of visibleProductColors(product); let colorIndex = index"
+              *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
               [class.selected]="selectedCardColorIndex(product) === colorIndex"
               [class.no-color-value]="!productColorHasVisual(variation)"
               [style.background]="productColorBackground(variation)"
@@ -139,13 +147,13 @@
           <div class="product-option-row">
             <span>Tamanho</span>
             <div>
-              <button type="button" *ngFor="let size of productSizes" [class.selected]="selectedCardSize(product) === size" (click)="selectCardSize($event, product, size)">{{ size }}</button>
+              <button type="button" *ngFor="let size of productSizes; trackBy: trackByValue" [class.selected]="selectedCardSize(product) === size" (click)="selectCardSize($event, product, size)">{{ size }}</button>
             </div>
           </div>
           <div class="product-option-row">
             <span>Gênero</span>
             <div>
-              <button type="button" *ngFor="let gender of productGenders" [class.selected]="selectedCardGender(product) === gender" (click)="selectCardGender($event, product, gender)">{{ gender }}</button>
+              <button type="button" *ngFor="let gender of productGenders; trackBy: trackByValue" [class.selected]="selectedCardGender(product) === gender" (click)="selectCardGender($event, product, gender)">{{ gender }}</button>
             </div>
           </div>
           <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
