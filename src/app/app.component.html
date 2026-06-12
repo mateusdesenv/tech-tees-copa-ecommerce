@@ -91,34 +91,33 @@
       <button type="button" class="view-all" (click)="openCatalog()">Ver todos →</button>
     </div>
 
-    <ng-container *ngIf="loading; else catalogSections">
-      <div class="products-grid" id="productsGrid">
-        <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of skeletonItems; trackBy: trackByIndex">
-          <div class="product-media"></div>
-          <div class="product-info">
-            <span class="skeleton-line title"></span>
-            <span class="skeleton-line price"></span>
-            <span class="skeleton-line category"></span>
-            <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
-            <span class="skeleton-button"></span>
-          </div>
-        </article>
-      </div>
-    </ng-container>
-
-    <ng-template #catalogSections>
-      <p *ngIf="catalogMessage" class="catalog-message" [class.error]="catalogTone === 'error'">
-        {{ catalogMessage }}
-      </p>
-
-      <section class="product-category-section" *ngIf="playerProducts.length" aria-labelledby="playersCategoryTitle">
+      <section class="product-category-section" aria-labelledby="playersCategoryTitle">
         <div class="product-category-head">
-          <span>Categoria</span>
-          <h3 id="playersCategoryTitle">Jogadores</h3>
-          <p>Camisetas inspiradas nos craques que marcaram gerações dentro e fora de campo.</p>
+          <div>
+            <span>Categoria</span>
+            <h3 id="playersCategoryTitle">Jogadores</h3>
+            <p>Camisetas inspiradas nos craques que marcaram gerações dentro e fora de campo.</p>
+          </div>
+          <button type="button" class="view-all" *ngIf="playerCategory" (click)="openCatalog(playerCategory.id)">Ver todos →</button>
         </div>
 
-        <div class="products-grid" id="productsGrid">
+        <div class="products-grid" id="productsGrid" *ngIf="isLoadingPlayers">
+          <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of homeSkeletonItems; trackBy: trackByIndex">
+            <div class="product-media"></div>
+            <div class="product-info">
+              <span class="skeleton-line title"></span>
+              <span class="skeleton-line price"></span>
+              <span class="skeleton-line category"></span>
+              <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
+              <span class="skeleton-button"></span>
+            </div>
+          </article>
+        </div>
+
+        <p class="catalog-message error" *ngIf="!isLoadingPlayers && playersError">{{ playersError }}</p>
+        <p class="catalog-message" *ngIf="!isLoadingPlayers && !playersError && !playerProducts.length">Nenhuma camiseta cadastrada em Jogadores.</p>
+
+        <div class="products-grid" *ngIf="!isLoadingPlayers && playerProducts.length">
           <article
             class="product-card clickable"
             *ngFor="let product of playerProducts; let index = index; trackBy: trackByProductId"
@@ -183,14 +182,33 @@
         </div>
       </section>
 
-      <section class="product-category-section" *ngIf="artistProducts.length" aria-labelledby="artistsCategoryTitle">
+      <section class="product-category-section" aria-labelledby="artistsCategoryTitle">
         <div class="product-category-head">
-          <span>Categoria</span>
-          <h3 id="artistsCategoryTitle">Artistas</h3>
-          <p>Estampas com referências da música, cultura e personalidade brasileira.</p>
+          <div>
+            <span>Categoria</span>
+            <h3 id="artistsCategoryTitle">Artistas</h3>
+            <p>Estampas com referências da música, cultura e personalidade brasileira.</p>
+          </div>
+          <button type="button" class="view-all" *ngIf="artistCategory" (click)="openCatalog(artistCategory.id)">Ver todos →</button>
         </div>
 
-        <div class="products-grid">
+        <div class="products-grid" *ngIf="isLoadingPlayers || isLoadingArtists">
+          <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of homeSkeletonItems; trackBy: trackByIndex">
+            <div class="product-media"></div>
+            <div class="product-info">
+              <span class="skeleton-line title"></span>
+              <span class="skeleton-line price"></span>
+              <span class="skeleton-line category"></span>
+              <div class="product-colors skeleton-swatches"><span></span><span></span><span></span></div>
+              <span class="skeleton-button"></span>
+            </div>
+          </article>
+        </div>
+
+        <p class="catalog-message error" *ngIf="!isLoadingPlayers && !isLoadingArtists && artistsError">{{ artistsError }}</p>
+        <p class="catalog-message" *ngIf="!isLoadingPlayers && !isLoadingArtists && !artistsError && !artistProducts.length">Nenhuma camiseta cadastrada em Artistas.</p>
+
+        <div class="products-grid" *ngIf="!isLoadingPlayers && !isLoadingArtists && artistProducts.length">
           <article
             class="product-card clickable"
             *ngFor="let product of artistProducts; let index = index; trackBy: trackByProductId"
@@ -254,7 +272,6 @@
           </article>
         </div>
       </section>
-    </ng-template>
   </section>
 
   <section id="manifesto" class="campaign reveal" data-parallax="section">

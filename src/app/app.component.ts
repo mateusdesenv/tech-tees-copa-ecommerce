@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { CatalogCategory, CategoryService } from './category.service';
 import { MetaPixelService } from './meta-pixel.service';
 import { OrderItem, OrderService } from './order.service';
+import { ProductService } from './product.service';
 
 declare global {
   interface Window {
@@ -140,11 +141,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly metaPixel = inject(MetaPixelService);
   private readonly authService = inject(AuthService);
   private readonly categoryService = inject(CategoryService);
+  private readonly productService = inject(ProductService);
   private readonly orderService = inject(OrderService);
   private readonly router = inject(Router);
   private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
   private readonly playerCategoryNames = new Set(['jogadores']);
-  private readonly artistCategoryNames = new Set(['artistas']);
+  private readonly artistCategoryNames = new Set(['artista', 'artistas']);
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
@@ -165,8 +167,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   catalogSort: 'price-asc' | 'price-desc' = 'price-asc';
   catalogView: 'grid' | 'list' = 'grid';
   catalogCategoryError = '';
+  playerCategory: CatalogCategory | null = null;
+  artistCategory: CatalogCategory | null = null;
   playerProducts: Product[] = [];
   artistProducts: Product[] = [];
+  isLoadingPlayers = false;
+  isLoadingArtists = false;
+  playersError = '';
+  artistsError = '';
   activeStore: StoreResponse | null = null;
   selectedProduct: Product | null = null;
   selectedProductColorIndex = 0;
@@ -175,6 +183,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   editorialProducts: Array<Product | null> = [null, null];
   lookbookProducts: Array<Product | null> = [null, null, null, null];
   skeletonItems = Array.from({ length: 8 });
+  homeSkeletonItems = Array.from({ length: 4 });
   readonly user$ = this.authService.user$;
   cartItems: CartItem[] = this.readStoredCart();
   lastAddedProductName = '';
@@ -216,6 +225,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private cardPaymentBrickController: MercadoPagoBrickController | null = null;
   private readonly productCardImagesCache = new Map<string, string[]>();
   private routerSubscription?: Subscription;
+  private viewInitialized = false;
+  private homeLoaded = false;
+  private catalogLoaded = false;
+  private homeLoadPromise?: Promise<void>;
+  private catalogLoadPromise?: Promise<void>;
 
   ngOnInit(): void {
     this.metaPixel.init();
@@ -226,13 +240,17 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe((event) => {
         this.syncViewWithRoute(event.urlAfterRedirects);
         this.metaPixel.trackPageView();
+        if (this.viewInitialized) {
+          void this.ensureRouteData();
+        }
       });
   }
 
   ngAfterViewInit(): void {
     this.initScrollAnimations();
     this.initParallax();
-    void this.loadProducts();
+    this.viewInitialized = true;
+    void this.ensureRouteData();
   }
 
   ngOnDestroy(): void {
@@ -263,8 +281,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }).format(Number(value) || 0);
   }
 
-  openCatalog(): void {
-    void this.router.navigate(['/catalogo']);
+  openCatalog(categoryId = ''): void {
+    void this.router.navigate(['/catalogo'], {
+      queryParams: categoryId ? { categoryId } : undefined,
+    });
   }
 
   updateCatalogFilters(): void {
@@ -921,7 +941,100 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private async loadProducts(): Promise<void> {
+  private ensureRouteData(): Promise<void> {
+    if (this.isAuthRoute || this.isCheckoutView) {
+      return Promise.resolve();
+    }
+
+    return this.isCatalogView ? this.loadCatalogProducts() : this.loadHomeProducts();
+  }
+
+  private loadHomeProducts(): Promise<void> {
+    if (this.homeLoaded) {
+      return Promise.resolve();
+    }
+
+    this.homeLoadPromise ??= this.fetchHomeProducts().finally(() => {
+      this.homeLoadPromise = undefined;
+    });
+    return this.homeLoadPromise;
+  }
+
+  private async fetchHomeProducts(): Promise<void> {
+    this.playersError = '';
+    this.artistsError = '';
+    this.catalogMessage = '';
+    this.catalogTone = '';
+    this.isLoadingPlayers = true;
+
+    try {
+      const store = this.activeStore || await this.findCopaStore();
+
+      if (!store) {
+        this.playersError = `A loja "${this.storeName}" não foi encontrada na API.`;
+        this.artistsError = this.playersError;
+        return;
+      }
+
+      this.activeStore = store;
+      const categories = await this.loadPublicCategories();
+      const playersCategory = this.findCategory(categories, this.playerCategoryNames);
+      this.playerCategory = playersCategory || null;
+
+      if (!playersCategory) {
+        this.playersError = 'A categoria Jogadores ainda não foi cadastrada.';
+      } else {
+        this.playerProducts = await this.fetchHomeCategoryProducts(store.id, playersCategory);
+      }
+    } catch {
+      this.playersError = 'Não foi possível carregar as camisetas de Jogadores.';
+    } finally {
+      this.isLoadingPlayers = false;
+      this.activeProducts = [...this.playerProducts];
+      this.renderDynamicSections(this.activeProducts);
+      setTimeout(() => this.refreshParallax());
+    }
+
+    this.isLoadingArtists = true;
+
+    try {
+      const store = this.activeStore;
+      const artistsCategory = this.findCategory(this.catalogCategories, this.artistCategoryNames);
+      this.artistCategory = artistsCategory || null;
+
+      if (!store) {
+        this.artistsError = `A loja "${this.storeName}" não foi encontrada na API.`;
+      } else if (!artistsCategory) {
+        this.artistsError = 'A categoria Artista/Artistas ainda não foi cadastrada.';
+      } else {
+        this.artistProducts = await this.fetchHomeCategoryProducts(store.id, artistsCategory);
+      }
+    } catch {
+      this.artistsError = 'Não foi possível carregar as camisetas de Artistas.';
+    } finally {
+      this.isLoadingArtists = false;
+      this.activeProducts = [...this.playerProducts, ...this.artistProducts];
+      this.products = this.activeProducts;
+      this.productCardImagesCache.clear();
+      this.renderDynamicSections(this.activeProducts);
+      this.homeLoaded = true;
+      setTimeout(() => this.refreshParallax());
+    }
+  }
+
+  private loadCatalogProducts(): Promise<void> {
+    if (this.catalogLoaded) {
+      this.applyCatalogCategoryFromUrl();
+      return Promise.resolve();
+    }
+
+    this.catalogLoadPromise ??= this.fetchCatalogProducts().finally(() => {
+      this.catalogLoadPromise = undefined;
+    });
+    return this.catalogLoadPromise;
+  }
+
+  private async fetchCatalogProducts(): Promise<void> {
     this.loading = true;
     this.catalogMessage = '';
     this.catalogTone = '';
@@ -935,42 +1048,67 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.activeStore = store;
-      const products = await firstValueFrom(
-        this.http.get<Product[]>(`${this.apiBaseUrl}/products?storeId=${encodeURIComponent(store.id)}`),
-      );
+      const [products] = await Promise.all([
+        firstValueFrom(this.productService.getProducts({ storeId: store.id, status: 'active' })),
+        this.loadPublicCategories(),
+      ]);
 
-      this.products = products.map((product, index) => this.normalizeProductIdentity(product, index));
-      const activeCatalogProducts = this.products.filter((product) => product.status === 'active');
+      this.products = (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
+      const activeCatalogProducts = this.products;
       this.catalogProducts = activeCatalogProducts;
+      this.applyCatalogCategoryFromUrl();
       this.updateCatalogFilters();
-      this.playerProducts = activeCatalogProducts.filter((product) => this.isPlayerProduct(product));
-      this.artistProducts = activeCatalogProducts.filter((product) => this.isArtistProduct(product));
-      this.activeProducts = [...this.playerProducts, ...this.artistProducts];
       this.productCardImagesCache.clear();
-
-      try {
-        this.catalogCategories = (await firstValueFrom(this.categoryService.getPublicCategories()))
-          .filter((category) => category.active !== false);
-        this.catalogCategoryError = '';
-        this.updateCatalogFilters();
-      } catch {
-        this.catalogCategories = [];
-        this.catalogCategoryError = 'Não foi possível carregar as categorias.';
-      }
-
-      if (this.activeProducts.length === 0) {
-        this.catalogMessage = 'Nenhuma camiseta ativa encontrada nas categorias Jogadores e Artistas.';
-        this.catalogTone = '';
-        this.loading = false;
-        return;
-      }
-
-      this.renderDynamicSections(this.activeProducts);
-      this.loading = false;
-      setTimeout(() => this.refreshParallax());
+      this.catalogLoaded = true;
     } catch {
-      this.showMessage('Não foi possível carregar as camisetas da API.', 'error');
+      this.catalogProducts = [];
+      this.filteredCatalogProducts = [];
+      this.catalogMessage = 'Não foi possível carregar o catálogo da API.';
+      this.catalogTone = 'error';
+    } finally {
+      this.loading = false;
     }
+  }
+
+  private async loadPublicCategories(): Promise<CatalogCategory[]> {
+    try {
+      this.catalogCategories = (await firstValueFrom(this.categoryService.getPublicCategories()))
+        .filter((category) => category.active !== false);
+      this.catalogCategoryError = '';
+      return this.catalogCategories;
+    } catch (error) {
+      this.catalogCategories = [];
+      this.catalogCategoryError = 'Não foi possível carregar as categorias.';
+      throw error;
+    }
+  }
+
+  private findCategory(categories: CatalogCategory[], acceptedNames: Set<string>): CatalogCategory | undefined {
+    return categories.find((category) => {
+      const normalizedName = this.normalizeCategoryName(category.name);
+      const normalizedSlug = this.normalizeCategoryName(String(category.slug || '').replace(/-/g, ' '));
+      return acceptedNames.has(normalizedName) || acceptedNames.has(normalizedSlug);
+    });
+  }
+
+  private async fetchHomeCategoryProducts(storeId: string, category: CatalogCategory): Promise<Product[]> {
+    const products = await firstValueFrom(this.productService.getProducts({
+      storeId,
+      categoryId: category.id,
+      page: 1,
+      limit: 4,
+      status: 'active',
+    }));
+
+    return (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
+  }
+
+  private applyCatalogCategoryFromUrl(): void {
+    const query = this.router.url.split('?')[1] || '';
+    const categoryId = new URLSearchParams(query).get('categoryId') || '';
+    this.selectedCatalogCategory = this.catalogCategories.some((category) => category.id === categoryId)
+      ? categoryId
+      : '';
   }
 
   private async findCopaStore(): Promise<StoreResponse | null> {

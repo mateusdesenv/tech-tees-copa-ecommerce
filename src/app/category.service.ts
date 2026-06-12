@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, shareReplay } from 'rxjs';
 import { environment } from '../environments/environment';
 
 export interface CatalogCategory {
@@ -13,8 +13,13 @@ export interface CatalogCategory {
 @Injectable({ providedIn: 'root' })
 export class CategoryService {
   private readonly http = inject(HttpClient);
+  private categoriesRequest?: Observable<CatalogCategory[]>;
 
   getPublicCategories(): Observable<CatalogCategory[]> {
-    return this.http.get<CatalogCategory[]>(`${environment.apiBaseUrl}/categories/public`);
+    this.categoriesRequest ??= this.http
+      .get<CatalogCategory[]>(`${environment.apiBaseUrl}/categories/public`)
+      .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+
+    return this.categoriesRequest;
   }
 }

@@ -431,6 +431,13 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   background: #f8f5ef;
   box-shadow: 0 8px 24px rgba(12,18,14,.045);
 }
+.product-category-head > div {
+  min-width: 0;
+}
+.product-category-head .view-all {
+  flex: 0 0 auto;
+  align-self: center;
+}
 .product-category-head::after {
   content: '';
   position: absolute;
