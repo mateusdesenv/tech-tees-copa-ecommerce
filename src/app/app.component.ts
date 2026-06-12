@@ -1048,10 +1048,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.activeStore = store;
-      const [products] = await Promise.all([
-        firstValueFrom(this.productService.getProducts({ storeId: store.id, status: 'active' })),
-        this.loadPublicCategories(),
-      ]);
+      await this.loadPublicCategories();
+      const products = await firstValueFrom(
+        this.productService.getProducts({ storeId: store.id, status: 'active' }),
+      );
 
       this.products = (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
       const activeCatalogProducts = this.products;
