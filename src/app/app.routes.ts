@@ -18,6 +18,10 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'catalogo',
+    component: EmptyRouteComponent,
+  },
+  {
     path: 'minha-conta',
     loadComponent: () => import('./account.component').then((module) => module.AccountComponent),
     canActivate: [authGuard],

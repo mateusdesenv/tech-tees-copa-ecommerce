@@ -13,6 +13,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/catalogo",
+      "destination": "/index.html"
+    },
+    {
       "source": "/minha-conta",
       "destination": "/index.html"
     },

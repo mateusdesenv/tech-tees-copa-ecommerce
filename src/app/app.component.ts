@@ -7,6 +7,7 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
+import { CatalogCategory, CategoryService } from './category.service';
 import { MetaPixelService } from './meta-pixel.service';
 import { OrderItem, OrderService } from './order.service';
 
@@ -61,7 +62,16 @@ interface Product {
   colorRgb?: ColorRgb | null;
   colors?: ProductColorVariation[];
   category?: string;
-  categories?: Array<string | { name?: string; title?: string; label?: string; value?: string }>;
+  categoryId?: string;
+  categoryIds?: string[];
+  categories?: Array<string | {
+    id?: string;
+    slug?: string;
+    name?: string;
+    title?: string;
+    label?: string;
+    value?: string;
+  }>;
   description?: string;
   sales?: number;
   status?: string;
@@ -129,6 +139,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly metaPixel = inject(MetaPixelService);
   private readonly authService = inject(AuthService);
+  private readonly categoryService = inject(CategoryService);
   private readonly orderService = inject(OrderService);
   private readonly router = inject(Router);
   private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
@@ -146,6 +157,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   catalogTone: 'error' | '' = '';
   products: Product[] = [];
   activeProducts: Product[] = [];
+  catalogProducts: Product[] = [];
+  filteredCatalogProducts: Product[] = [];
+  catalogCategories: CatalogCategory[] = [];
+  catalogSearch = '';
+  selectedCatalogCategory = '';
+  catalogSort: 'price-asc' | 'price-desc' = 'price-asc';
+  catalogView: 'grid' | 'list' = 'grid';
+  catalogCategoryError = '';
   playerProducts: Product[] = [];
   artistProducts: Product[] = [];
   activeStore: StoreResponse | null = null;
@@ -162,6 +181,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   cartOpen = false;
   accountMenuOpen = false;
   isCheckoutView = false;
+  isCatalogView = false;
   isAuthRoute = false;
   checkoutStep: CheckoutStep = 'address';
   addressSubmitted = false;
@@ -241,6 +261,36 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       style: 'currency',
       currency: 'BRL',
     }).format(Number(value) || 0);
+  }
+
+  openCatalog(): void {
+    void this.router.navigate(['/catalogo']);
+  }
+
+  updateCatalogFilters(): void {
+    const search = this.catalogSearch.trim().toLocaleLowerCase('pt-BR');
+    const selectedCategory = this.catalogCategories.find(
+      (category) => category.id === this.selectedCatalogCategory,
+    );
+
+    this.filteredCatalogProducts = this.catalogProducts
+      .filter((product) => !search || product.name.toLocaleLowerCase('pt-BR').includes(search))
+      .filter((product) => !selectedCategory || this.productMatchesCategory(product, selectedCategory))
+      .sort((first, second) => {
+        const priceDifference = Number(first.price || 0) - Number(second.price || 0);
+        return this.catalogSort === 'price-desc' ? -priceDifference : priceDifference;
+      });
+  }
+
+  clearCatalogFilters(): void {
+    this.catalogSearch = '';
+    this.selectedCatalogCategory = '';
+    this.catalogSort = 'price-asc';
+    this.updateCatalogFilters();
+  }
+
+  setCatalogView(view: 'grid' | 'list'): void {
+    this.catalogView = view;
   }
 
   normalizeImagePath(image?: string): string {
@@ -891,13 +941,27 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
       this.products = products.map((product, index) => this.normalizeProductIdentity(product, index));
       const activeCatalogProducts = this.products.filter((product) => product.status === 'active');
+      this.catalogProducts = activeCatalogProducts;
+      this.updateCatalogFilters();
       this.playerProducts = activeCatalogProducts.filter((product) => this.isPlayerProduct(product));
       this.artistProducts = activeCatalogProducts.filter((product) => this.isArtistProduct(product));
       this.activeProducts = [...this.playerProducts, ...this.artistProducts];
       this.productCardImagesCache.clear();
 
+      try {
+        this.catalogCategories = (await firstValueFrom(this.categoryService.getPublicCategories()))
+          .filter((category) => category.active !== false);
+        this.catalogCategoryError = '';
+        this.updateCatalogFilters();
+      } catch {
+        this.catalogCategories = [];
+        this.catalogCategoryError = 'Não foi possível carregar as categorias.';
+      }
+
       if (this.activeProducts.length === 0) {
-        this.showMessage('Nenhuma camiseta ativa encontrada nas categorias Jogadores e Artistas.');
+        this.catalogMessage = 'Nenhuma camiseta ativa encontrada nas categorias Jogadores e Artistas.';
+        this.catalogTone = '';
+        this.loading = false;
         return;
       }
 
@@ -927,6 +991,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loading = false;
     this.activeStore = null;
     this.activeProducts = [];
+    this.catalogProducts = [];
+    this.filteredCatalogProducts = [];
     this.playerProducts = [];
     this.artistProducts = [];
     this.catalogMessage = message;
@@ -986,6 +1052,33 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       .toLocaleLowerCase('pt-BR')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private productMatchesCategory(product: Product, category: CatalogCategory): boolean {
+    const categoryIds = new Set([
+      String(product.categoryId || ''),
+      ...(Array.isArray(product.categoryIds) ? product.categoryIds.map(String) : []),
+    ].filter(Boolean));
+    const categoryNames = new Set(this.productCategoryNames(product).map((name) => this.normalizeCategoryName(name)));
+    const categorySlugs = new Set<string>();
+
+    if (Array.isArray(product.categories)) {
+      product.categories.forEach((value) => {
+        if (value && typeof value === 'object') {
+          if (value.id) {
+            categoryIds.add(String(value.id));
+          }
+
+          if (value.slug) {
+            categorySlugs.add(this.normalizeCategoryName(value.slug.replace(/-/g, ' ')));
+          }
+        }
+      });
+    }
+
+    return categoryIds.has(category.id)
+      || categoryNames.has(this.normalizeCategoryName(category.name))
+      || categorySlugs.has(this.normalizeCategoryName(String(category.slug || '').replace(/-/g, ' ')));
   }
 
   private renderDynamicSections(products: Product[]): void {
@@ -1136,6 +1229,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private syncViewWithRoute(url: string): void {
     const path = url.split('?')[0].split('#')[0];
     const checkoutRoute = path === '/checkout';
+    const catalogRoute = path === '/catalogo';
     const wasCheckoutView = this.isCheckoutView;
 
     this.isAuthRoute = [
@@ -1145,6 +1239,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       '/minhas-compras',
     ].includes(path);
     this.isCheckoutView = checkoutRoute;
+    this.isCatalogView = catalogRoute;
     this.accountMenuOpen = false;
 
     if (checkoutRoute && !wasCheckoutView) {

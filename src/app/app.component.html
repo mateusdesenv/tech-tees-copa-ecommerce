@@ -1,6 +1,6 @@
 <router-outlet></router-outlet>
 
-<main *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">
+<main *ngIf="!isAuthRoute && !isCheckoutView && !isCatalogView && !selectedProduct">
   <header class="site-header">
     <a class="site-logo" href="#inicio" aria-label="Tech Tees Brasil - início">
       <span class="site-logo-mark" aria-hidden="true">♛</span>
@@ -88,7 +88,7 @@
         <span class="label dark"></span>
         <h2>Coleção rumo ao hexa</h2>
       </div>
-      <a href="#" class="view-all">Ver todos →</a>
+      <button type="button" class="view-all" (click)="openCatalog()">Ver todos →</button>
     </div>
 
     <ng-container *ngIf="loading; else catalogSections">
@@ -281,7 +281,7 @@
         <span class="label dark">Mais fortes</span>
         <h2>Novos lançamentos</h2>
       </div>
-      <a href="#" class="view-all">Ver todos →</a>
+      <button type="button" class="view-all" (click)="openCatalog()">Ver todos →</button>
     </div>
 
     <div class="launch-grid">
@@ -334,6 +334,218 @@
       />
     </div>
   </section>
+</main>
+
+<main class="catalog-page" *ngIf="!isAuthRoute && isCatalogView && !selectedProduct">
+  <header class="site-header catalog-header">
+    <button class="site-logo" type="button" (click)="backToStore()" aria-label="Tech Tees Brasil - início">
+      <span class="site-logo-mark" aria-hidden="true">♛</span>
+      <strong>TECH TEES</strong>
+      <small>BRASIL</small>
+    </button>
+
+    <nav class="site-nav" aria-label="Navegação principal">
+      <button type="button" (click)="backToStore()">Início</button>
+      <button type="button" class="active">Coleção</button>
+      <button type="button" (click)="backToStore()">Sobre</button>
+    </nav>
+
+    <div class="site-actions">
+      <button class="header-icon-button header-cart-button" type="button" aria-label="Abrir carrinho" (click)="openCart()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 8h12l1 12H5L6 8Z"></path>
+          <path d="M9 9V6a3 3 0 0 1 6 0v3"></path>
+        </svg>
+        <strong *ngIf="cartQuantity()">{{ cartQuantity() }}</strong>
+      </button>
+      <ng-container *ngIf="user$ | async as user; else catalogLoginButton">
+        <div class="account-menu" (click)="$event.stopPropagation()">
+          <button class="account-avatar" type="button" aria-label="Abrir menu da conta" (click)="toggleAccountMenu($event)">
+            <img *ngIf="user.photoURL; else catalogInitials" [src]="user.photoURL" alt="" referrerpolicy="no-referrer" />
+            <ng-template #catalogInitials>{{ userInitials(user) }}</ng-template>
+          </button>
+          <div class="account-popup" *ngIf="accountMenuOpen">
+            <div class="account-popup-user">
+              <strong>{{ user.displayName || 'Minha conta' }}</strong>
+              <small>{{ user.email }}</small>
+            </div>
+            <button type="button" (click)="navigateToCustomerPage('/minha-conta')">Minha conta</button>
+            <button type="button" (click)="navigateToCustomerPage('/minhas-compras')">Minhas compras</button>
+            <button type="button" class="account-logout" (click)="logout()">Sair</button>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #catalogLoginButton>
+        <button class="header-login-button" type="button" (click)="openLogin()">Entrar</button>
+      </ng-template>
+    </div>
+  </header>
+
+  <section class="catalog-hero">
+    <span>Tech Tees Brasil</span>
+    <h1>Todas as camisetas</h1>
+    <p>Explore todas as camisetas disponíveis na loja.</p>
+  </section>
+
+  <div class="catalog-layout">
+    <aside class="catalog-filters">
+      <div class="catalog-filter-head">
+        <strong>Filtros</strong>
+        <button type="button" (click)="clearCatalogFilters()">Limpar filtros</button>
+      </div>
+
+      <label class="catalog-search">
+        <span>Buscar</span>
+        <input
+          type="search"
+          placeholder="Nome da camiseta"
+          [(ngModel)]="catalogSearch"
+          (ngModelChange)="updateCatalogFilters()"
+        />
+      </label>
+
+      <fieldset>
+        <legend>Categorias</legend>
+        <label>
+          <input type="radio" name="catalogCategory" value="" [(ngModel)]="selectedCatalogCategory" (ngModelChange)="updateCatalogFilters()" />
+          <span>Todas</span>
+        </label>
+        <label *ngFor="let category of catalogCategories">
+          <input
+            type="radio"
+            name="catalogCategory"
+            [value]="category.id"
+            [(ngModel)]="selectedCatalogCategory"
+            (ngModelChange)="updateCatalogFilters()"
+          />
+          <span>{{ category.name }}</span>
+        </label>
+        <small class="catalog-filter-error" *ngIf="catalogCategoryError">{{ catalogCategoryError }}</small>
+      </fieldset>
+
+      <label class="catalog-sort">
+        <span>Ordenar por</span>
+        <select [(ngModel)]="catalogSort" (ngModelChange)="updateCatalogFilters()">
+          <option value="price-asc">Menor preço</option>
+          <option value="price-desc">Maior preço</option>
+        </select>
+      </label>
+    </aside>
+
+    <section class="catalog-results">
+      <header class="catalog-results-head">
+        <div>
+          <strong>{{ filteredCatalogProducts.length }} {{ filteredCatalogProducts.length === 1 ? 'produto encontrado' : 'produtos encontrados' }}</strong>
+          <button
+            type="button"
+            *ngIf="catalogSearch || selectedCatalogCategory"
+            (click)="clearCatalogFilters()"
+          >
+            Limpar filtros
+          </button>
+        </div>
+        <div class="catalog-view-toggle" aria-label="Modo de visualização">
+          <button type="button" title="Visualização em grade" [class.active]="catalogView === 'grid'" (click)="setCatalogView('grid')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+          </button>
+          <button type="button" title="Visualização em lista" [class.active]="catalogView === 'list'" (click)="setCatalogView('list')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="catalog-loading" *ngIf="loading">
+        <span *ngFor="let item of skeletonItems; trackBy: trackByIndex"></span>
+      </div>
+
+      <p class="catalog-error-state" *ngIf="!loading && catalogTone === 'error'">{{ catalogMessage }}</p>
+      <p class="catalog-empty-state" *ngIf="!loading && !catalogTone && !filteredCatalogProducts.length">Nenhum produto encontrado.</p>
+
+      <div class="products-grid catalog-products-grid" *ngIf="!loading && filteredCatalogProducts.length && catalogView === 'grid'">
+        <article
+          class="product-card clickable"
+          *ngFor="let product of filteredCatalogProducts; let index = index; trackBy: trackByProductId"
+          [style.--card-delay.ms]="index * 45"
+          tabindex="0"
+          role="button"
+          [attr.aria-label]="'Ver detalhes de ' + product.name"
+          (mouseenter)="startProductCardCarousel(product)"
+          (mouseleave)="stopProductCardCarousel()"
+          (focusin)="startProductCardCarousel(product)"
+          (focusout)="stopProductCardCarousel()"
+          (click)="openProduct(product)"
+          (keydown.enter)="openProduct(product)"
+        >
+          <div class="product-media product-carousel-media">
+            <img
+              *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
+              [src]="normalizeImagePath(image)"
+              [alt]="product.name + ' variação ' + (imageIndex + 1)"
+              [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+              loading="lazy"
+              decoding="async"
+              width="800"
+              height="1000"
+              (load)="markImageLoaded($event)"
+              (error)="setFallbackImage($event)"
+            />
+          </div>
+          <div class="product-info">
+            <h3>{{ product.name }}</h3>
+            <p>{{ formatCurrency(product.price) }}</p>
+            <small>{{ product.category }}</small>
+            <div class="product-colors" *ngIf="productColors(product).length">
+              <button
+                type="button"
+                class="color-swatch"
+                *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
+                [class.selected]="selectedCardColorIndex(product) === colorIndex"
+                [class.no-color-value]="!productColorHasVisual(variation)"
+                [style.background]="productColorBackground(variation)"
+                [attr.title]="variation.color"
+                (click)="selectCardColor($event, product, colorIndex)"
+              ></button>
+              <span class="more-colors" *ngIf="hiddenProductColorsCount(product)">+{{ hiddenProductColorsCount(product) }}</span>
+            </div>
+            <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
+              <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
+              <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div class="catalog-list" *ngIf="!loading && filteredCatalogProducts.length && catalogView === 'list'">
+        <article
+          *ngFor="let product of filteredCatalogProducts; trackBy: trackByProductId"
+          tabindex="0"
+          role="button"
+          (click)="openProduct(product)"
+          (keydown.enter)="openProduct(product)"
+        >
+          <img [src]="normalizeImagePath(selectedCardColor(product)?.image || product.image)" [alt]="product.name" loading="lazy" decoding="async" (error)="setFallbackImage($event)" />
+          <div class="catalog-list-copy">
+            <small>{{ product.category }}</small>
+            <h2>{{ product.name }}</h2>
+            <div class="product-colors" *ngIf="productColors(product).length">
+              <button
+                type="button"
+                class="color-swatch"
+                *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
+                [class.selected]="selectedCardColorIndex(product) === colorIndex"
+                [class.no-color-value]="!productColorHasVisual(variation)"
+                [style.background]="productColorBackground(variation)"
+                [attr.title]="variation.color"
+                (click)="selectCardColor($event, product, colorIndex)"
+              ></button>
+            </div>
+          </div>
+          <strong>{{ formatCurrency(product.price) }}</strong>
+          <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">Adicionar ao carrinho</button>
+        </article>
+      </div>
+    </section>
+  </div>
 </main>
 
 <footer id="contact" class="footer reveal" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">

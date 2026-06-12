@@ -65,6 +65,10 @@ As rotas `/minha-conta` e `/minhas-compras` também exigem autenticação. Depoi
 
 Enquanto não houver um endpoint de pedidos por cliente, o `OrderService` salva o histórico no `localStorage`, associado ao `uid` do Firebase. A tela `/minhas-compras` filtra pelo usuário autenticado, ordena os pedidos mais recentes primeiro e exibe os detalhes dos itens em uma modal. Essa camada está isolada para facilitar a futura troca por uma API.
 
+## Catálogo
+
+A rota pública `/catalogo` lista todos os produtos ativos da loja, com busca, categorias dinâmicas, ordenação de preço e modos grade/lista. As categorias são carregadas pelo endpoint público `GET /categories/public`; operações administrativas em `/categories` continuam protegidas.
+
 ## API usada
 
 O projeto mantém o consumo da API original:
