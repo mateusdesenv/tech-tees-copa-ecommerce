@@ -61,6 +61,7 @@ interface Product {
   colorRgb?: ColorRgb | null;
   colors?: ProductColorVariation[];
   category?: string;
+  categories?: Array<string | { name?: string; title?: string; label?: string; value?: string }>;
   description?: string;
   sales?: number;
   status?: string;
@@ -131,6 +132,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly orderService = inject(OrderService);
   private readonly router = inject(Router);
   private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
+  private readonly playerCategoryNames = new Set(['jogadores']);
+  private readonly artistCategoryNames = new Set(['artistas']);
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
@@ -143,6 +146,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   catalogTone: 'error' | '' = '';
   products: Product[] = [];
   activeProducts: Product[] = [];
+  playerProducts: Product[] = [];
+  artistProducts: Product[] = [];
   activeStore: StoreResponse | null = null;
   selectedProduct: Product | null = null;
   selectedProductColorIndex = 0;
@@ -885,11 +890,14 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       );
 
       this.products = products.map((product, index) => this.normalizeProductIdentity(product, index));
-      this.activeProducts = this.products.filter((product) => product.status === 'active');
+      const activeCatalogProducts = this.products.filter((product) => product.status === 'active');
+      this.playerProducts = activeCatalogProducts.filter((product) => this.isPlayerProduct(product));
+      this.artistProducts = activeCatalogProducts.filter((product) => this.isArtistProduct(product));
+      this.activeProducts = [...this.playerProducts, ...this.artistProducts];
       this.productCardImagesCache.clear();
 
       if (this.activeProducts.length === 0) {
-        this.showMessage('Nenhuma camiseta ativa encontrada.');
+        this.showMessage('Nenhuma camiseta ativa encontrada nas categorias Jogadores e Artistas.');
         return;
       }
 
@@ -919,8 +927,65 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loading = false;
     this.activeStore = null;
     this.activeProducts = [];
+    this.playerProducts = [];
+    this.artistProducts = [];
     this.catalogMessage = message;
     this.catalogTone = tone;
+  }
+
+
+  private isPlayerProduct(product: Product): boolean {
+    return this.hasProductCategory(product, this.playerCategoryNames);
+  }
+
+  private isArtistProduct(product: Product): boolean {
+    return this.hasProductCategory(product, this.artistCategoryNames);
+  }
+
+  private hasProductCategory(product: Product, categoryNames: Set<string>): boolean {
+    return this.productCategoryNames(product).some((category) => categoryNames.has(this.normalizeCategoryName(category)));
+  }
+
+  private productCategoryNames(product: Product): string[] {
+    const names = new Set<string>();
+
+    const addCategory = (category: unknown): void => {
+      if (typeof category === 'string') {
+        const value = category.trim();
+
+        if (value) {
+          names.add(value);
+        }
+
+        return;
+      }
+
+      if (category && typeof category === 'object') {
+        const record = category as Record<string, unknown>;
+        const value = String(record['name'] || record['title'] || record['label'] || record['value'] || '').trim();
+
+        if (value) {
+          names.add(value);
+        }
+      }
+    };
+
+    addCategory(product.category);
+
+    if (Array.isArray(product.categories)) {
+      product.categories.forEach(addCategory);
+    }
+
+    return Array.from(names);
+  }
+
+  private normalizeCategoryName(category: string): string {
+    return category
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private renderDynamicSections(products: Product[]): void {

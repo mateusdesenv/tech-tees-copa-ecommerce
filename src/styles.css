@@ -394,6 +394,60 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
 }
 .view-all:hover { color: var(--green); transform: translateX(4px); }
 
+.product-category-section {
+  margin-top: 34px;
+}
+.product-category-section:first-of-type {
+  margin-top: 0;
+}
+.product-category-head {
+  position: relative;
+  overflow: hidden;
+  min-height: 142px;
+  margin-bottom: 22px;
+  padding: 24px;
+  border: 1px solid rgba(17,17,17,.08);
+  border-radius: 8px;
+  background: #f8f5ef;
+  box-shadow: 0 8px 24px rgba(12,18,14,.045);
+}
+.product-category-head::after {
+  content: '';
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  right: -46px;
+  bottom: -58px;
+  border-radius: 999px;
+  background: rgba(19, 96, 53, .09);
+}
+.product-category-head span {
+  display: block;
+  margin-bottom: 18px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.product-category-head h3 {
+  margin: 0 0 10px;
+  font-size: clamp(26px, 3vw, 42px);
+  line-height: .92;
+  letter-spacing: -.052em;
+  text-transform: uppercase;
+}
+.product-category-head p {
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
 .products-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1657,6 +1711,11 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   }
   .section { padding: 42px 18px; }
   .section-head { align-items: start; flex-direction: column; }
+  .product-category-section { margin-top: 28px; }
+  .product-category-head { min-height: 128px; margin-bottom: 18px; padding: 20px; }
+  .category-subtitle-card { min-height: 136px; padding: 20px; }
+  .category-subtitle-card span { margin-bottom: 14px; }
+  .category-subtitle-card p { font-size: 13px; }
   .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .benefits, .launch-grid, .editorial-products, .lookbook-strip, .footer { grid-template-columns: 1fr; }
   .product-card { min-height: 500px; }

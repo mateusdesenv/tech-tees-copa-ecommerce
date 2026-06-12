@@ -91,8 +91,8 @@
       <a href="#" class="view-all">Ver todos →</a>
     </div>
 
-    <div class="products-grid" id="productsGrid">
-      <ng-container *ngIf="loading">
+    <ng-container *ngIf="loading; else catalogSections">
+      <div class="products-grid" id="productsGrid">
         <article class="product-card product-skeleton" aria-hidden="true" *ngFor="let item of skeletonItems; trackBy: trackByIndex">
           <div class="product-media"></div>
           <div class="product-info">
@@ -103,74 +103,158 @@
             <span class="skeleton-button"></span>
           </div>
         </article>
-      </ng-container>
+      </div>
+    </ng-container>
 
-      <p *ngIf="!loading && catalogMessage" class="catalog-message" [class.error]="catalogTone === 'error'">
+    <ng-template #catalogSections>
+      <p *ngIf="catalogMessage" class="catalog-message" [class.error]="catalogTone === 'error'">
         {{ catalogMessage }}
       </p>
 
-      <article
-        class="product-card clickable"
-        *ngFor="let product of activeProducts; let index = index; trackBy: trackByProductId"
-        [style.--card-delay.ms]="index * 70"
-        tabindex="0"
-        role="button"
-        [attr.aria-label]="'Ver detalhes de ' + product.name"
-        (mouseenter)="startProductCardCarousel(product)"
-        (mouseleave)="stopProductCardCarousel()"
-        (focusin)="startProductCardCarousel(product)"
-        (focusout)="stopProductCardCarousel()"
-        (click)="openProduct(product)"
-        (keydown.enter)="openProduct(product)"
-      >
-        <div class="product-media product-carousel-media">
-          <img
-            *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
-            [src]="normalizeImagePath(image)"
-            [alt]="product.name + ' variação ' + (imageIndex + 1)"
-            [class.active]="productCardCarouselIndex(product, index) === imageIndex"
-            loading="lazy"
-            decoding="async"
-            width="800"
-            height="1000"
-            (load)="markImageLoaded($event)"
-            (error)="setFallbackImage($event)"
-          />
-          <div class="product-carousel-dots" *ngIf="productCardCarouselImages(product).length > 1" aria-hidden="true">
-            <span
-              *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
-              [class.active]="productCardCarouselIndex(product, index) === imageIndex"
-            ></span>
-          </div>
+      <section class="product-category-section" *ngIf="playerProducts.length" aria-labelledby="playersCategoryTitle">
+        <div class="product-category-head">
+          <span>Categoria</span>
+          <h3 id="playersCategoryTitle">Jogadores</h3>
+          <p>Camisetas inspiradas nos craques que marcaram gerações dentro e fora de campo.</p>
         </div>
-        <div class="product-info">
-          <h3>{{ product.name }}</h3>
-          <p>{{ formatCurrency(product.price) }}</p>
-          <small>{{ product.category }}</small>
-          <div class="product-colors" *ngIf="productColors(product).length">
-            <button
-              type="button"
-              class="color-swatch"
-              *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
-              [class.selected]="selectedCardColorIndex(product) === colorIndex"
-              [class.no-color-value]="!productColorHasVisual(variation)"
-              [style.background]="productColorBackground(variation)"
-              [attr.title]="variation.color"
-              [attr.aria-label]="'Selecionar cor ' + variation.color"
-              (click)="selectCardColor($event, product, colorIndex)"
-            ></button>
-            <span class="more-colors" *ngIf="hiddenProductColorsCount(product)">+{{ hiddenProductColorsCount(product) }}</span>
-            <span class="legacy-color" *ngIf="selectedCardColor(product) && !productColorHasVisual(selectedCardColor(product)!)">
-              {{ selectedCardColor(product)?.color }}
-            </span>
-          </div>
-          <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
-            <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
-            <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
-          </button>
+
+        <div class="products-grid" id="productsGrid">
+          <article
+            class="product-card clickable"
+            *ngFor="let product of playerProducts; let index = index; trackBy: trackByProductId"
+            [style.--card-delay.ms]="index * 70"
+            tabindex="0"
+            role="button"
+            [attr.aria-label]="'Ver detalhes de ' + product.name"
+            (mouseenter)="startProductCardCarousel(product)"
+            (mouseleave)="stopProductCardCarousel()"
+            (focusin)="startProductCardCarousel(product)"
+            (focusout)="stopProductCardCarousel()"
+            (click)="openProduct(product)"
+            (keydown.enter)="openProduct(product)"
+          >
+            <div class="product-media product-carousel-media">
+              <img
+                *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
+                [src]="normalizeImagePath(image)"
+                [alt]="product.name + ' variação ' + (imageIndex + 1)"
+                [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+                loading="lazy"
+                decoding="async"
+                width="800"
+                height="1000"
+                (load)="markImageLoaded($event)"
+                (error)="setFallbackImage($event)"
+              />
+              <div class="product-carousel-dots" *ngIf="productCardCarouselImages(product).length > 1" aria-hidden="true">
+                <span
+                  *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
+                  [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+                ></span>
+              </div>
+            </div>
+            <div class="product-info">
+              <h3>{{ product.name }}</h3>
+              <p>{{ formatCurrency(product.price) }}</p>
+              <small>{{ product.category }}</small>
+              <div class="product-colors" *ngIf="productColors(product).length">
+                <button
+                  type="button"
+                  class="color-swatch"
+                  *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
+                  [class.selected]="selectedCardColorIndex(product) === colorIndex"
+                  [class.no-color-value]="!productColorHasVisual(variation)"
+                  [style.background]="productColorBackground(variation)"
+                  [attr.title]="variation.color"
+                  [attr.aria-label]="'Selecionar cor ' + variation.color"
+                  (click)="selectCardColor($event, product, colorIndex)"
+                ></button>
+                <span class="more-colors" *ngIf="hiddenProductColorsCount(product)">+{{ hiddenProductColorsCount(product) }}</span>
+                <span class="legacy-color" *ngIf="selectedCardColor(product) && !productColorHasVisual(selectedCardColor(product)!)">
+                  {{ selectedCardColor(product)?.color }}
+                </span>
+              </div>
+              <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
+                <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
+                <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
+              </button>
+            </div>
+          </article>
         </div>
-      </article>
-    </div>
+      </section>
+
+      <section class="product-category-section" *ngIf="artistProducts.length" aria-labelledby="artistsCategoryTitle">
+        <div class="product-category-head">
+          <span>Categoria</span>
+          <h3 id="artistsCategoryTitle">Artistas</h3>
+          <p>Estampas com referências da música, cultura e personalidade brasileira.</p>
+        </div>
+
+        <div class="products-grid">
+          <article
+            class="product-card clickable"
+            *ngFor="let product of artistProducts; let index = index; trackBy: trackByProductId"
+            [style.--card-delay.ms]="(playerProducts.length + index) * 70"
+            tabindex="0"
+            role="button"
+            [attr.aria-label]="'Ver detalhes de ' + product.name"
+            (mouseenter)="startProductCardCarousel(product)"
+            (mouseleave)="stopProductCardCarousel()"
+            (focusin)="startProductCardCarousel(product)"
+            (focusout)="stopProductCardCarousel()"
+            (click)="openProduct(product)"
+            (keydown.enter)="openProduct(product)"
+          >
+            <div class="product-media product-carousel-media">
+              <img
+                *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
+                [src]="normalizeImagePath(image)"
+                [alt]="product.name + ' variação ' + (imageIndex + 1)"
+                [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+                loading="lazy"
+                decoding="async"
+                width="800"
+                height="1000"
+                (load)="markImageLoaded($event)"
+                (error)="setFallbackImage($event)"
+              />
+              <div class="product-carousel-dots" *ngIf="productCardCarouselImages(product).length > 1" aria-hidden="true">
+                <span
+                  *ngFor="let image of productCardCarouselImages(product); let imageIndex = index; trackBy: trackByImage"
+                  [class.active]="productCardCarouselIndex(product, index) === imageIndex"
+                ></span>
+              </div>
+            </div>
+            <div class="product-info">
+              <h3>{{ product.name }}</h3>
+              <p>{{ formatCurrency(product.price) }}</p>
+              <small>{{ product.category }}</small>
+              <div class="product-colors" *ngIf="productColors(product).length">
+                <button
+                  type="button"
+                  class="color-swatch"
+                  *ngFor="let variation of visibleProductColors(product); let colorIndex = index; trackBy: trackByProductColor"
+                  [class.selected]="selectedCardColorIndex(product) === colorIndex"
+                  [class.no-color-value]="!productColorHasVisual(variation)"
+                  [style.background]="productColorBackground(variation)"
+                  [attr.title]="variation.color"
+                  [attr.aria-label]="'Selecionar cor ' + variation.color"
+                  (click)="selectCardColor($event, product, colorIndex)"
+                ></button>
+                <span class="more-colors" *ngIf="hiddenProductColorsCount(product)">+{{ hiddenProductColorsCount(product) }}</span>
+                <span class="legacy-color" *ngIf="selectedCardColor(product) && !productColorHasVisual(selectedCardColor(product)!)">
+                  {{ selectedCardColor(product)?.color }}
+                </span>
+              </div>
+              <button class="add-to-cart" type="button" (click)="$event.stopPropagation(); addCardProductToCart(product)">
+                <span>{{ productCartQuantity(product) ? 'Adicionar mais' : 'Adicionar ao carrinho' }}</span>
+                <strong *ngIf="productCartQuantity(product)">{{ productCartQuantity(product) }}</strong>
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </ng-template>
   </section>
 
   <section id="manifesto" class="campaign reveal" data-parallax="section">
