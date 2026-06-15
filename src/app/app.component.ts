@@ -8,6 +8,7 @@ import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { CatalogCategory, CategoryService } from './category.service';
+import { CONTACT_INFO } from './contact-info';
 import { MetaPixelService } from './meta-pixel.service';
 import { OrderItem, OrderService } from './order.service';
 import { ProductService } from './product.service';
@@ -33,7 +34,10 @@ interface MercadoPagoBrickController {
 }
 
 interface MercadoPagoCardPaymentSettings {
-  initialization: { amount: number };
+  initialization: {
+    amount: number;
+    payer?: { email?: string };
+  };
   customization?: Record<string, unknown>;
   callbacks: {
     onReady: () => void;
@@ -57,6 +61,8 @@ interface Product {
   price: number | string;
   image?: string;
   imageBack?: string;
+  imageFemale?: string;
+  imageBackFemale?: string;
   color?: string;
   colorId?: string;
   colorHex?: string;
@@ -99,6 +105,8 @@ interface ProductColorVariation {
   colorRgb?: ColorRgb | null;
   image?: string;
   imageBack?: string;
+  imageFemale?: string;
+  imageBackFemale?: string;
 }
 
 interface CartItem {
@@ -110,6 +118,7 @@ type CheckoutStep = 'address' | 'payment' | 'confirmation';
 
 interface AddressForm {
   fullName: string;
+  email: string;
   cpf: string;
   cep: string;
   street: string;
@@ -145,13 +154,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly orderService = inject(OrderService);
   private readonly router = inject(Router);
   private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
-  private readonly playerCategoryNames = new Set(['jogadores']);
-  private readonly artistCategoryNames = new Set(['artista', 'artistas']);
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
   readonly storeName = environment.storeName;
   readonly storeSlug = environment.storeSlug;
+  readonly contactInfo = CONTACT_INFO;
   readonly fallbackImage = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 800 1000%22%3E%3Crect width=%22800%22 height=%221000%22 fill=%22%23eee8dc%22/%3E%3Ctext x=%22400%22 y=%22500%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22700%22 fill=%22%236d675d%22%3ETECH-TEES%3C/text%3E%3C/svg%3E';
 
   loading = true;
@@ -207,6 +215,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly productGenders: ProductGender[] = ['Masculino', 'Feminino'];
   readonly addressForm: AddressForm = {
     fullName: '',
+    email: '',
     cpf: '',
     cep: '',
     street: '',
@@ -233,6 +242,19 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.metaPixel.init();
+    this.user$.subscribe((user) => {
+      if (!user) {
+        return;
+      }
+
+      if (!this.addressForm.email) {
+        this.addressForm.email = user.email || '';
+      }
+
+      if (!this.addressForm.fullName) {
+        this.addressForm.fullName = user.displayName || '';
+      }
+    });
     this.syncViewWithRoute(this.router.url);
 
     this.routerSubscription = this.router.events
@@ -420,7 +442,13 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   productColors(product: Product): ProductColorVariation[] {
     const variations = Array.isArray(product.colors)
-      ? product.colors.filter((variation) => variation.color || variation.colorId || variation.image || variation.imageBack)
+      ? product.colors.filter((variation) =>
+          variation.color
+          || variation.colorId
+          || variation.image
+          || variation.imageBack
+          || variation.imageFemale
+          || variation.imageBackFemale)
       : [];
 
     if (variations.length > 0) {
@@ -436,6 +464,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
         colorRgb: product.colorRgb,
         image: product.image,
         imageBack: product.imageBack,
+        imageFemale: product.imageFemale,
+        imageBackFemale: product.imageBackFemale,
       }];
     }
 
@@ -526,6 +556,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       colorRgb: variation?.colorRgb || product.colorRgb,
       image: variation?.image || product.image,
       imageBack: variation?.imageBack || product.imageBack,
+      imageFemale: variation?.imageFemale || product.imageFemale,
+      imageBackFemale: variation?.imageBackFemale || product.imageBackFemale,
       selectedSize: 'M',
       selectedGender: 'Masculino',
     };
@@ -562,7 +594,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   selectProductImageSide(side: 'front' | 'back'): void {
-    if (side === 'back' && !this.selectedProductColor()?.imageBack) {
+    if (side === 'back' && !this.selectedProductBackImageAvailable()) {
       return;
     }
 
@@ -578,7 +610,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.selectedProductColorIndex = index;
 
-    if (this.selectedProductImageSide === 'back' && !colors[index].imageBack) {
+    if (this.selectedProductImageSide === 'back' && !this.variationImage(colors[index], 'back')) {
       this.selectedProductImageSide = 'front';
     }
   }
@@ -602,6 +634,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       colorRgb: this.selectedProduct.colorRgb,
       image: this.selectedProduct.image,
       imageBack: this.selectedProduct.imageBack,
+      imageFemale: this.selectedProduct.imageFemale,
+      imageBackFemale: this.selectedProduct.imageBackFemale,
     }];
   }
 
@@ -616,11 +650,16 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const selectedColor = this.selectedProductColor();
 
-    if (this.selectedProductImageSide === 'back' && selectedColor?.imageBack) {
-      return selectedColor.imageBack;
-    }
+    return this.variationImage(selectedColor, this.selectedProductImageSide)
+      || this.variationImage(this.selectedProduct, this.selectedProductImageSide)
+      || this.fallbackImage;
+  }
 
-    return selectedColor?.image || this.selectedProduct.image || this.fallbackImage;
+  selectedProductBackImageAvailable(): boolean {
+    return Boolean(
+      this.variationImage(this.selectedProductColor(), 'back')
+      || this.variationImage(this.selectedProduct, 'back'),
+    );
   }
 
   selectedProductImageAlt(): string {
@@ -654,8 +693,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       colorId: variation.colorId || this.selectedProduct.colorId,
       colorHex: variation.colorHex || this.selectedProduct.colorHex,
       colorRgb: variation.colorRgb || this.selectedProduct.colorRgb,
-      image: variation.image || this.selectedProduct.image,
-      imageBack: variation.imageBack || this.selectedProduct.imageBack,
+      image: this.variationImage(variation, 'front') || this.variationImage(this.selectedProduct, 'front'),
+      imageBack: this.variationImage(variation, 'back') || this.variationImage(this.selectedProduct, 'back'),
+      imageFemale: variation.imageFemale || this.selectedProduct.imageFemale,
+      imageBackFemale: variation.imageBackFemale || this.selectedProduct.imageBackFemale,
       selectedSize: this.selectedProductSize,
       selectedGender: this.selectedProductGender,
     };
@@ -851,10 +892,22 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.paymentStatus = 'Processando pagamento...';
 
     try {
+      const user = this.authService.currentUser || await this.authService.waitForAuthState();
+
+      if (!user) {
+        throw new Error('Não foi possível identificar o usuário autenticado.');
+      }
+
+      const idToken = await user.getIdToken();
+      const payer = this.toRecord(formData['payer']);
       const payment = await firstValueFrom(
         this.http.post<MercadoPagoPaymentResponse>(`${this.apiBaseUrl}/checkout/process-payment`, {
           payment: {
             ...formData,
+            payer: {
+              ...payer,
+              email: this.addressForm.email,
+            },
             shippingAddress: { ...this.addressForm },
           },
           items: this.cartItems.map((item) => ({
@@ -869,6 +922,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
           })),
           shipping: this.shipping(),
           storeId: this.activeStore?.id,
+        }, {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
         }),
       );
 
@@ -885,12 +942,6 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
           color: item.product.color,
           image: item.product.image,
         }));
-        const user = this.authService.currentUser || await this.authService.waitForAuthState();
-
-        if (!user) {
-          throw new Error('Não foi possível identificar o usuário autenticado para salvar o pedido.');
-        }
-
         try {
           this.orderService.createOrder({
             id: String(payment.externalReference || payment.id),
@@ -978,16 +1029,16 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
       this.activeStore = store;
       const categories = await this.loadPublicCategories();
-      const playersCategory = this.findCategory(categories, this.playerCategoryNames);
+      const playersCategory = categories[0];
       this.playerCategory = playersCategory || null;
 
       if (!playersCategory) {
-        this.playersError = 'A categoria Jogadores ainda não foi cadastrada.';
+        this.playersError = 'Nenhuma categoria foi cadastrada para esta loja.';
       } else {
         this.playerProducts = await this.fetchHomeCategoryProducts(store.id, playersCategory);
       }
     } catch {
-      this.playersError = 'Não foi possível carregar as camisetas de Jogadores.';
+      this.playersError = 'Não foi possível carregar as camisetas desta categoria.';
     } finally {
       this.isLoadingPlayers = false;
       this.activeProducts = [...this.playerProducts];
@@ -999,18 +1050,18 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
     try {
       const store = this.activeStore;
-      const artistsCategory = this.findCategory(this.catalogCategories, this.artistCategoryNames);
+      const artistsCategory = this.catalogCategories[1];
       this.artistCategory = artistsCategory || null;
 
       if (!store) {
         this.artistsError = `A loja "${this.storeName}" não foi encontrada na API.`;
       } else if (!artistsCategory) {
-        this.artistsError = 'A categoria Artista/Artistas ainda não foi cadastrada.';
+        this.artistsError = '';
       } else {
         this.artistProducts = await this.fetchHomeCategoryProducts(store.id, artistsCategory);
       }
     } catch {
-      this.artistsError = 'Não foi possível carregar as camisetas de Artistas.';
+      this.artistsError = 'Não foi possível carregar as camisetas desta categoria.';
     } finally {
       this.isLoadingArtists = false;
       this.activeProducts = [...this.playerProducts, ...this.artistProducts];
@@ -1083,14 +1134,6 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private findCategory(categories: CatalogCategory[], acceptedNames: Set<string>): CatalogCategory | undefined {
-    return categories.find((category) => {
-      const normalizedName = this.normalizeCategoryName(category.name);
-      const normalizedSlug = this.normalizeCategoryName(String(category.slug || '').replace(/-/g, ' '));
-      return acceptedNames.has(normalizedName) || acceptedNames.has(normalizedSlug);
-    });
-  }
-
   private async fetchHomeCategoryProducts(storeId: string, category: CatalogCategory): Promise<Product[]> {
     const products = await firstValueFrom(this.productService.getProducts({
       storeId,
@@ -1138,18 +1181,6 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
 
-  private isPlayerProduct(product: Product): boolean {
-    return this.hasProductCategory(product, this.playerCategoryNames);
-  }
-
-  private isArtistProduct(product: Product): boolean {
-    return this.hasProductCategory(product, this.artistCategoryNames);
-  }
-
-  private hasProductCategory(product: Product, categoryNames: Set<string>): boolean {
-    return this.productCategoryNames(product).some((category) => categoryNames.has(this.normalizeCategoryName(category)));
-  }
-
   private productCategoryNames(product: Product): string[] {
     const names = new Set<string>();
 
@@ -1190,6 +1221,23 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       .toLocaleLowerCase('pt-BR')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private variationImage(
+    source: ProductColorVariation | Product | null,
+    side: 'front' | 'back',
+  ): string {
+    if (!source) {
+      return '';
+    }
+
+    if (this.selectedProductGender === 'Feminino') {
+      return side === 'back'
+        ? source.imageBackFemale || source.imageBack || ''
+        : source.imageFemale || source.image || '';
+    }
+
+    return side === 'back' ? source.imageBack || '' : source.image || '';
   }
 
   private productMatchesCategory(product: Product, category: CatalogCategory): boolean {
@@ -1282,6 +1330,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private isAddressValid(): boolean {
     const requiredFields: Array<keyof AddressForm> = [
       'fullName',
+      'email',
       'cpf',
       'cep',
       'street',
@@ -1320,6 +1369,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cardPaymentBrickController = await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', {
         initialization: {
           amount: Number(this.orderTotal().toFixed(2)),
+          payer: {
+            email: this.addressForm.email,
+          },
         },
         customization: {
           visual: {
@@ -1403,6 +1455,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  private toRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object'
+      ? value as Record<string, unknown>
+      : {};
   }
 
   private readStoredCart(): CartItem[] {

@@ -17,6 +17,30 @@ a { color: inherit; text-decoration: none; }
 img { display: block; width: 100%; max-width: 100%; object-fit: cover; }
 button { font: inherit; border: 0; background: none; cursor: pointer; }
 
+.store-page-header {
+  background: #fffdf8;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+}
+.auth-topbar {
+  min-height: 76px;
+  padding: 0 clamp(18px, 4vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.auth-topbar nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.auth-topbar nav a {
+  color: #111;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
 .site-header {
   position: relative;
   z-index: 20;
@@ -879,8 +903,12 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   gap: 34px;
   background: #f4f0e8;
 }
+.footer-compact {
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, .8fr);
+}
 .footer strong { display: block; font-size: 14px; text-transform: uppercase; margin-bottom: 12px; }
-.footer p, .footer a { display: block; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.footer p, .footer a, .footer span { display: block; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.footer a:hover { color: #111; }
 .copyright { height: 34px; display: grid; place-items: center; background: var(--dark); color: white; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .product-detail-page {
   min-height: 100vh;
@@ -1697,6 +1725,12 @@ h2 { font-size: clamp(30px, 4vw, 58px); line-height: .9; letter-spacing: -.06em;
   .footer { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 640px) {
+  .auth-topbar {
+    min-height: 68px;
+    padding-inline: 16px;
+  }
+  .auth-topbar nav { gap: 14px; }
+  .auth-topbar nav a { font-size: 9px; }
   #shop.reveal {
     opacity: 1;
     transform: none;

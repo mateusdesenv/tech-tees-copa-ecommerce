@@ -22,7 +22,7 @@ export class OrdersComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     try {
       const user = this.authService.currentUser || await this.authService.waitForAuthState();
-      this.orders = user ? this.orderService.getOrdersByUser(user.uid) : [];
+      this.orders = user ? await this.orderService.getOrdersByUser(user) : [];
     } catch {
       this.errorMessage = 'Não foi possível carregar seus pedidos. Tente novamente.';
     } finally {

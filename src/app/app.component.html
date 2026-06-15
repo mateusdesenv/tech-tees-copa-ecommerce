@@ -1,7 +1,7 @@
 <router-outlet></router-outlet>
 
 <main *ngIf="!isAuthRoute && !isCheckoutView && !isCatalogView && !selectedProduct">
-  <header class="site-header">
+  <header class="site-header store-page-header">
     <a class="site-logo" href="#inicio" aria-label="Tech Tees Brasil - início">
       <span class="site-logo-mark" aria-hidden="true">♛</span>
       <strong>TECH TEES</strong>
@@ -55,7 +55,6 @@
   <section id="inicio" class="hero" data-parallax="hero">
     <div class="hero-shell">
       <div class="hero-copy">
-        <p class="hero-kicker">Drop 01 · Brasil 2026</p>
         <h1>
           <span>Futebol<i>.</i></span>
           <span>Cultura<i>.</i></span>
@@ -95,8 +94,8 @@
         <div class="product-category-head">
           <div>
             <span>Categoria</span>
-            <h3 id="playersCategoryTitle">Jogadores</h3>
-            <p>Camisetas inspiradas nos craques que marcaram gerações dentro e fora de campo.</p>
+            <h3 id="playersCategoryTitle">{{ playerCategory?.name || 'Coleção' }}</h3>
+            <p>Explore as camisetas cadastradas nesta categoria.</p>
           </div>
           <button type="button" class="view-all" *ngIf="playerCategory" (click)="openCatalog(playerCategory.id)">Ver todos →</button>
         </div>
@@ -115,7 +114,7 @@
         </div>
 
         <p class="catalog-message error" *ngIf="!isLoadingPlayers && playersError">{{ playersError }}</p>
-        <p class="catalog-message" *ngIf="!isLoadingPlayers && !playersError && !playerProducts.length">Nenhuma camiseta cadastrada em Jogadores.</p>
+        <p class="catalog-message" *ngIf="!isLoadingPlayers && !playersError && !playerProducts.length">Nenhuma camiseta cadastrada nesta categoria.</p>
 
         <div class="products-grid" *ngIf="!isLoadingPlayers && playerProducts.length">
           <article
@@ -182,12 +181,12 @@
         </div>
       </section>
 
-      <section class="product-category-section" aria-labelledby="artistsCategoryTitle">
+      <section class="product-category-section" aria-labelledby="artistsCategoryTitle" *ngIf="artistCategory || isLoadingArtists">
         <div class="product-category-head">
           <div>
             <span>Categoria</span>
-            <h3 id="artistsCategoryTitle">Artistas</h3>
-            <p>Estampas com referências da música, cultura e personalidade brasileira.</p>
+            <h3 id="artistsCategoryTitle">{{ artistCategory?.name || 'Coleção' }}</h3>
+            <p>Descubra mais uma seleção criada a partir do catálogo real da loja.</p>
           </div>
           <button type="button" class="view-all" *ngIf="artistCategory" (click)="openCatalog(artistCategory.id)">Ver todos →</button>
         </div>
@@ -206,7 +205,7 @@
         </div>
 
         <p class="catalog-message error" *ngIf="!isLoadingPlayers && !isLoadingArtists && artistsError">{{ artistsError }}</p>
-        <p class="catalog-message" *ngIf="!isLoadingPlayers && !isLoadingArtists && !artistsError && !artistProducts.length">Nenhuma camiseta cadastrada em Artistas.</p>
+        <p class="catalog-message" *ngIf="!isLoadingPlayers && !isLoadingArtists && !artistsError && !artistProducts.length">Nenhuma camiseta cadastrada nesta categoria.</p>
 
         <div class="products-grid" *ngIf="!isLoadingPlayers && !isLoadingArtists && artistProducts.length">
           <article
@@ -354,7 +353,7 @@
 </main>
 
 <main class="catalog-page" *ngIf="!isAuthRoute && isCatalogView && !selectedProduct">
-  <header class="site-header catalog-header">
+  <header class="site-header catalog-header store-page-header">
     <button class="site-logo" type="button" (click)="backToStore()" aria-label="Tech Tees Brasil - início">
       <span class="site-logo-mark" aria-hidden="true">♛</span>
       <strong>TECH TEES</strong>
@@ -565,35 +564,25 @@
   </div>
 </main>
 
-<footer id="contact" class="footer reveal" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">
+<footer id="contact" class="footer footer-compact reveal" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">
   <div>
     <strong>TECH-TEES</strong>
     <p>Streetwear brasileiro inspirado em Copa, tecnologia e cultura de rua.</p>
   </div>
   <div>
-    <strong>Institucional</strong>
-    <a>Sobre nós</a>
-    <a>Lookbook</a>
-    <a>Sustentabilidade</a>
-  </div>
-  <div>
-    <strong>Ajuda</strong>
-    <a>Trocas e devoluções</a>
-    <a>Privacidade</a>
-    <a>Termos de uso</a>
-  </div>
-  <div>
     <strong>Contato</strong>
-    <a>WhatsApp</a>
-    <a>contato&#64;techtees.com</a>
-    <a>Seg. a sex. 9h às 18h</a>
+    <a *ngIf="contactInfo.whatsapp" [href]="contactInfo.whatsapp" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+    <span *ngIf="!contactInfo.whatsapp">WhatsApp a configurar</span>
+    <a [href]="'mailto:' + contactInfo.email">{{ contactInfo.email }}</a>
+    <a *ngIf="contactInfo.instagram" [href]="contactInfo.instagram" target="_blank" rel="noopener noreferrer">Instagram oficial</a>
+    <span *ngIf="!contactInfo.instagram">Instagram a configurar</span>
   </div>
 </footer>
 
 <div class="copyright" *ngIf="!isAuthRoute && !isCheckoutView && !selectedProduct">© 2026 TECH-TEES. Todos os direitos reservados.</div>
 
 <main class="product-detail-page" *ngIf="!isAuthRoute && selectedProduct && !isCheckoutView">
-  <header class="product-detail-topbar">
+  <header class="product-detail-topbar store-page-header">
     <button type="button" (click)="closeProduct()">← Voltar para coleção</button>
     <strong>TECH-TEES</strong>
     <div class="detail-topbar-actions">
@@ -640,7 +629,7 @@
           <button
             type="button"
             [class.active]="selectedProductImageSide === 'back'"
-            [disabled]="!selectedProductColor()?.imageBack"
+            [disabled]="!selectedProductBackImageAvailable()"
             (click)="selectProductImageSide('back')"
           >
             Verso
@@ -657,7 +646,11 @@
           (click)="selectProductColor(index)"
         >
           <img
-            [src]="normalizeImagePath(variation.image || variation.imageBack)"
+            [src]="normalizeImagePath(
+              selectedProductGender === 'Feminino'
+                ? (variation.imageFemale || variation.image || variation.imageBackFemale || variation.imageBack)
+                : (variation.image || variation.imageBack)
+            )"
             [alt]="selectedProduct.name + ' ' + variation.color"
             (error)="setFallbackImage($event)"
           />
@@ -685,7 +678,14 @@
         <div>
           <span>Gênero</span>
           <div>
-            <button type="button" *ngFor="let gender of productGenders" [class.selected]="selectedProductGender === gender" (click)="selectedProductGender = gender">{{ gender }}</button>
+            <button
+              type="button"
+              *ngFor="let gender of productGenders"
+              [class.selected]="selectedProductGender === gender"
+              (click)="selectedProductGender = gender"
+            >
+              {{ gender }}
+            </button>
           </div>
         </div>
       </div>
@@ -720,7 +720,7 @@
 </main>
 
 <main class="checkout-page" *ngIf="!isAuthRoute && isCheckoutView">
-  <header class="checkout-topbar">
+  <header class="checkout-topbar store-page-header">
     <button type="button" class="checkout-back" (click)="backToStore()">← Voltar</button>
     <strong>TECH-TEES</strong>
     <span>Checkout seguro</span>
@@ -762,6 +762,10 @@
           <label class="full" [class.invalid]="fieldInvalid('fullName')">
             Nome completo
             <input name="fullName" autocomplete="name" [(ngModel)]="addressForm.fullName" />
+          </label>
+          <label class="full" [class.invalid]="fieldInvalid('email')">
+            E-mail
+            <input name="email" type="email" autocomplete="email" [(ngModel)]="addressForm.email" />
           </label>
           <label [class.invalid]="fieldInvalid('cpf')">
             CPF
@@ -808,7 +812,6 @@
         <div class="checkout-section-head">
           <span>Etapa 02</span>
           <h2>Pagamento</h2>
-          <p>Pagamento criptografado por Mercado Pago. Use cartão de teste quando estiver com credenciais TEST.</p>
         </div>
         <div id="cardPaymentBrick_container" class="payment-brick"></div>
         <p class="checkout-status" *ngIf="paymentStatus">{{ paymentStatus }}</p>

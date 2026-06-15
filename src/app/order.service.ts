@@ -1,4 +1,8 @@
-import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { User } from '@angular/fire/auth';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../environments/environment';
 
 export type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'failed' | 'completed';
 
@@ -36,9 +40,37 @@ export interface CreateOrderInput {
 
 @Injectable({ providedIn: 'root' })
 export class OrderService {
+  private readonly http = inject(HttpClient);
+  private readonly ordersUrl = `${environment.apiBaseUrl}/orders`;
   private readonly storageKey = 'tech-tees-copa-orders-v1';
 
-  getOrdersByUser(userId: string): Order[] {
+  async getOrdersByUser(user: User): Promise<Order[]> {
+    const localOrders = this.getStoredOrdersByUser(user.uid);
+
+    try {
+      const idToken = await user.getIdToken();
+      const apiOrders = await firstValueFrom(
+        this.http.get<unknown[]>(`${this.ordersUrl}/mine`, {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        }),
+      );
+
+      return this.mergeOrders(
+        apiOrders.map((order) => this.normalizeApiOrder(order, user.uid)).filter((order): order is Order => Boolean(order)),
+        localOrders,
+      );
+    } catch (error) {
+      if (localOrders.length) {
+        return localOrders;
+      }
+
+      throw error;
+    }
+  }
+
+  private getStoredOrdersByUser(userId: string): Order[] {
     return this.readOrders()
       .filter((order) => order.userId === userId)
       .sort((first, second) =>
@@ -112,6 +144,82 @@ export class OrderService {
       Number.isFinite(Number(order.total)) &&
       order.status &&
       order.createdAt,
+    );
+  }
+
+  private normalizeApiOrder(value: unknown, userId: string): Order | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const source = value as Record<string, unknown>;
+    const id = String(source['id'] || source['externalReference'] || source['paymentId'] || '');
+    const createdAt = String(source['createdAt'] || source['updatedAt'] || '');
+    const total = Number(source['total'] ?? source['totalAmount'] ?? 0);
+    const rawItems = Array.isArray(source['items']) ? source['items'] : [];
+
+    if (!id || !createdAt || !Number.isFinite(total)) {
+      return null;
+    }
+
+    return {
+      id,
+      userId,
+      total,
+      status: this.normalizeStatus(source['status'] || source['paymentStatus']),
+      createdAt,
+      paymentId: source['paymentId'] ? String(source['paymentId']) : undefined,
+      externalReference: source['externalReference'] ? String(source['externalReference']) : undefined,
+      items: rawItems.map((item) => this.normalizeApiItem(item)).filter((item): item is OrderItem => Boolean(item)),
+    };
+  }
+
+  private normalizeApiItem(value: unknown): OrderItem | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const source = value as Record<string, unknown>;
+    const productId = String(source['productId'] || source['id'] || '');
+    const name = String(source['name'] || source['title'] || 'Camiseta Tech Tees');
+    const quantity = Math.max(1, Number(source['quantity'] || 1));
+    const price = Number(source['price'] ?? source['unitPrice'] ?? source['unit_price'] ?? 0);
+
+    if (!productId || !Number.isFinite(price)) {
+      return null;
+    }
+
+    return {
+      productId,
+      name,
+      quantity,
+      price,
+      size: source['size'] || source['selectedSize'] ? String(source['size'] || source['selectedSize']) : undefined,
+      gender: source['gender'] || source['selectedGender'] ? String(source['gender'] || source['selectedGender']) : undefined,
+      color: source['color'] || source['selectedColor'] ? String(source['color'] || source['selectedColor']) : undefined,
+      image: source['image'] ? String(source['image']) : undefined,
+    };
+  }
+
+  private normalizeStatus(value: unknown): OrderStatus {
+    const status = String(value || '').toLowerCase();
+
+    if (status === 'approved' || status === 'paid') return 'paid';
+    if (status === 'completed') return 'completed';
+    if (status === 'cancelled' || status === 'canceled') return 'cancelled';
+    if (status === 'rejected' || status === 'failed') return 'failed';
+    return 'pending';
+  }
+
+  private mergeOrders(apiOrders: Order[], localOrders: Order[]): Order[] {
+    const orders = new Map<string, Order>();
+
+    [...localOrders, ...apiOrders].forEach((order) => {
+      orders.set(order.externalReference || order.id, order);
+    });
+
+    return Array.from(orders.values()).sort((first, second) =>
+      new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
     );
   }
 }
