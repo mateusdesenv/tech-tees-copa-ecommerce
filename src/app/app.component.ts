@@ -90,6 +90,13 @@ interface Product {
 
 type ProductSize = 'P' | 'M' | 'G';
 type ProductGender = 'Masculino' | 'Feminino';
+type HomeCategoryKey = 'jogadores' | 'artistas' | 'fashion';
+
+interface HomeCategory {
+  key: HomeCategoryKey;
+  label: string;
+  description: string;
+}
 
 interface ColorRgb {
   r: number;
@@ -154,6 +161,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly orderService = inject(OrderService);
   private readonly router = inject(Router);
   private readonly cartStorageKey = 'tech-tees-copa-cart-v1';
+  private readonly minimumHomeSkeletonMs = 320;
+  private readonly maxHomeProductsPerCategory = 4;
 
   readonly apiBaseUrl = environment.apiBaseUrl;
   readonly mercadoPagoPublicKey = environment.mercadoPagoPublicKey;
@@ -161,6 +170,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly storeSlug = environment.storeSlug;
   readonly contactInfo = CONTACT_INFO;
   readonly fallbackImage = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 800 1000%22%3E%3Crect width=%22800%22 height=%221000%22 fill=%22%23eee8dc%22/%3E%3Ctext x=%22400%22 y=%22500%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22700%22 fill=%22%236d675d%22%3ETECH-TEES%3C/text%3E%3C/svg%3E';
+  readonly homeCategories: HomeCategory[] = [
+    { key: 'jogadores', label: 'Jogadores', description: 'Camisetas inspiradas nos craques que marcaram gerações dentro e fora de campo.' },
+    { key: 'artistas', label: 'Artistas', description: 'Estampas com referências da música, cultura e personalidade brasileira.' },
+    { key: 'fashion', label: 'Fashion', description: 'Peças com estética streetwear, corte premium e leitura editorial.' },
+  ];
 
   loading = true;
   catalogMessage = '';
@@ -175,14 +189,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   catalogSort: 'price-asc' | 'price-desc' = 'price-asc';
   catalogView: 'grid' | 'list' = 'grid';
   catalogCategoryError = '';
-  playerCategory: CatalogCategory | null = null;
-  artistCategory: CatalogCategory | null = null;
-  playerProducts: Product[] = [];
-  artistProducts: Product[] = [];
-  isLoadingPlayers = false;
-  isLoadingArtists = false;
-  playersError = '';
-  artistsError = '';
+  visibleCategoryKeys: HomeCategoryKey[] = [];
+  loadingCategoryKey: HomeCategoryKey | null = null;
+  homeCategoryProducts: Record<HomeCategoryKey, Product[]> = this.emptyHomeCategoryProducts();
+  homeCategoryErrors: Record<HomeCategoryKey, string> = this.emptyHomeCategoryErrors();
+  homeCategoryCatalogMap: Record<HomeCategoryKey, CatalogCategory | null> = this.emptyHomeCategoryCatalogMap();
   activeStore: StoreResponse | null = null;
   selectedProduct: Product | null = null;
   selectedProductColorIndex = 0;
@@ -239,6 +250,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private catalogLoaded = false;
   private homeLoadPromise?: Promise<void>;
   private catalogLoadPromise?: Promise<void>;
+  private currentRoutePath = '';
+  private reloadHomeOnNextEnsure = false;
 
   ngOnInit(): void {
     this.metaPixel.init();
@@ -525,8 +538,37 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     return variation.id || variation.colorId || variation.color || String(index);
   }
 
+  trackByHomeCategoryKey(_index: number, category: HomeCategory): string {
+    return category.key;
+  }
+
   trackByIndex(index: number): number {
     return index;
+  }
+
+  isHomeCategoryVisible(key: HomeCategoryKey): boolean {
+    return this.visibleCategoryKeys.includes(key);
+  }
+
+  isHomeCategoryLoading(key: HomeCategoryKey): boolean {
+    return this.loadingCategoryKey === key;
+  }
+
+  homeProductsByCategory(key: HomeCategoryKey): Product[] {
+    return this.homeCategoryProducts[key] || [];
+  }
+
+  homeCategoryError(key: HomeCategoryKey): string {
+    return this.homeCategoryErrors[key] || '';
+  }
+
+  homeCategoryCatalog(key: HomeCategoryKey): CatalogCategory | null {
+    return this.homeCategoryCatalogMap[key] || null;
+  }
+
+  homeCategoryCardDelay(key: HomeCategoryKey, index: number): number {
+    const categoryIndex = this.homeCategories.findIndex((category) => category.key === key);
+    return Math.max(0, categoryIndex * this.homeSkeletonItems.length + index) * 70;
   }
 
   productColorBackground(variation: ProductColorVariation): string {
@@ -997,79 +1039,142 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       return Promise.resolve();
     }
 
-    return this.isCatalogView ? this.loadCatalogProducts() : this.loadHomeProducts();
+    if (this.isCatalogView) {
+      return this.loadCatalogProducts();
+    }
+
+    const forceReload = this.reloadHomeOnNextEnsure;
+    this.reloadHomeOnNextEnsure = false;
+    return this.loadHomeProducts(forceReload);
   }
 
-  private loadHomeProducts(): Promise<void> {
-    if (this.homeLoaded) {
+  private loadHomeProducts(forceReload = false): Promise<void> {
+    if (this.homeLoadPromise) {
+      return this.homeLoadPromise;
+    }
+
+    if (!forceReload && this.homeLoaded && this.hasHomeData()) {
+      this.rehydrateHomeView();
       return Promise.resolve();
     }
 
-    this.homeLoadPromise ??= this.fetchHomeProducts().finally(() => {
+    this.homeLoadPromise = this.fetchHomeProducts().finally(() => {
       this.homeLoadPromise = undefined;
     });
     return this.homeLoadPromise;
   }
 
   private async fetchHomeProducts(): Promise<void> {
-    this.playersError = '';
-    this.artistsError = '';
+    this.resetHomeViewState();
     this.catalogMessage = '';
     this.catalogTone = '';
-    this.isLoadingPlayers = true;
 
     try {
       const store = this.activeStore || await this.findCopaStore();
 
       if (!store) {
-        this.playersError = `A loja "${this.storeName}" não foi encontrada na API.`;
-        this.artistsError = this.playersError;
+        await this.revealHomeCategoryErrors(`A loja "${this.storeName}" não foi encontrada na API.`);
         return;
       }
 
       this.activeStore = store;
       const categories = await this.loadPublicCategories();
-      const playersCategory = categories[0];
-      this.playerCategory = playersCategory || null;
+      this.homeCategoryCatalogMap = this.mapHomeCategories(categories);
+      const products = await firstValueFrom(
+        this.productService.getProducts({ storeId: store.id, status: 'active' }),
+      );
+      const sourceProducts = (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
 
-      if (!playersCategory) {
-        this.playersError = 'Nenhuma categoria foi cadastrada para esta loja.';
-      } else {
-        this.playerProducts = await this.fetchHomeCategoryProducts(store.id, playersCategory);
+      this.products = sourceProducts;
+
+      for (const category of this.homeCategories) {
+        const skeletonStartedAt = Date.now();
+        this.loadingCategoryKey = category.key;
+        await this.waitForMinimumHomeSkeleton(skeletonStartedAt);
+        const categoryProducts = sourceProducts
+          .filter((product) => this.productMatchesHomeCategory(product, category))
+          .slice(0, this.maxHomeProductsPerCategory);
+        this.homeCategoryProducts = {
+          ...this.homeCategoryProducts,
+          [category.key]: categoryProducts,
+        };
+        this.homeCategoryErrors = {
+          ...this.homeCategoryErrors,
+          [category.key]: '',
+        };
+        this.visibleCategoryKeys = [...this.visibleCategoryKeys, category.key];
+        this.activeProducts = this.visibleCategoryKeys.flatMap((key) => this.homeCategoryProducts[key]);
+        this.renderDynamicSections(this.activeProducts);
+        setTimeout(() => this.reactivateHomeVisuals());
       }
     } catch {
-      this.playersError = 'Não foi possível carregar as camisetas desta categoria.';
+      await this.revealHomeCategoryErrors('Não foi possível carregar as camisetas desta categoria.');
     } finally {
-      this.isLoadingPlayers = false;
-      this.activeProducts = [...this.playerProducts];
-      this.renderDynamicSections(this.activeProducts);
-      setTimeout(() => this.refreshParallax());
-    }
-
-    this.isLoadingArtists = true;
-
-    try {
-      const store = this.activeStore;
-      const artistsCategory = this.catalogCategories[1];
-      this.artistCategory = artistsCategory || null;
-
-      if (!store) {
-        this.artistsError = `A loja "${this.storeName}" não foi encontrada na API.`;
-      } else if (!artistsCategory) {
-        this.artistsError = '';
-      } else {
-        this.artistProducts = await this.fetchHomeCategoryProducts(store.id, artistsCategory);
-      }
-    } catch {
-      this.artistsError = 'Não foi possível carregar as camisetas desta categoria.';
-    } finally {
-      this.isLoadingArtists = false;
-      this.activeProducts = [...this.playerProducts, ...this.artistProducts];
       this.products = this.activeProducts;
       this.productCardImagesCache.clear();
       this.renderDynamicSections(this.activeProducts);
       this.homeLoaded = true;
-      setTimeout(() => this.refreshParallax());
+      this.loadingCategoryKey = null;
+      setTimeout(() => this.reactivateHomeVisuals());
+    }
+  }
+
+  private hasHomeData(): boolean {
+    return Boolean(
+      this.activeStore
+      && this.visibleCategoryKeys.length === this.homeCategories.length,
+    );
+  }
+
+  private resetHomeViewState(): void {
+    this.stopProductCardCarousel();
+    this.productCardImagesCache.clear();
+    this.visibleCategoryKeys = [];
+    this.loadingCategoryKey = null;
+    this.homeCategoryProducts = this.emptyHomeCategoryProducts();
+    this.homeCategoryErrors = this.emptyHomeCategoryErrors();
+    this.homeCategoryCatalogMap = this.emptyHomeCategoryCatalogMap();
+    this.activeProducts = [];
+    this.featuredProduct = null;
+    this.editorialProducts = [null, null];
+    this.lookbookProducts = [null, null, null, null];
+  }
+
+  private showHomeSkeletonState(): void {
+    this.resetHomeViewState();
+    this.catalogMessage = '';
+    this.catalogTone = '';
+    this.loadingCategoryKey = this.homeCategories[0]?.key || null;
+  }
+
+  private rehydrateHomeView(): void {
+    this.stopProductCardCarousel();
+    this.productCardImagesCache.clear();
+    this.activeProducts = this.homeCategories.flatMap((category) => this.homeCategoryProducts[category.key]);
+    this.products = this.activeProducts;
+    this.renderDynamicSections(this.activeProducts);
+    setTimeout(() => this.reactivateHomeVisuals());
+  }
+
+  private async revealHomeCategoryErrors(message: string): Promise<void> {
+    for (const category of this.homeCategories) {
+      const skeletonStartedAt = Date.now();
+      this.loadingCategoryKey = category.key;
+      await this.waitForMinimumHomeSkeleton(skeletonStartedAt);
+      this.homeCategoryErrors = {
+        ...this.homeCategoryErrors,
+        [category.key]: message,
+      };
+      this.visibleCategoryKeys = [...this.visibleCategoryKeys, category.key];
+    }
+  }
+
+  private async waitForMinimumHomeSkeleton(startedAt: number): Promise<void> {
+    const elapsed = Date.now() - startedAt;
+    const remaining = this.minimumHomeSkeletonMs - elapsed;
+
+    if (remaining > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, remaining));
     }
   }
 
@@ -1134,18 +1239,6 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private async fetchHomeCategoryProducts(storeId: string, category: CatalogCategory): Promise<Product[]> {
-    const products = await firstValueFrom(this.productService.getProducts({
-      storeId,
-      categoryId: category.id,
-      page: 1,
-      limit: 4,
-      status: 'active',
-    }));
-
-    return (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
-  }
-
   private applyCatalogCategoryFromUrl(): void {
     const query = this.router.url.split('?')[1] || '';
     const categoryId = new URLSearchParams(query).get('categoryId') || '';
@@ -1174,10 +1267,54 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.activeProducts = [];
     this.catalogProducts = [];
     this.filteredCatalogProducts = [];
-    this.playerProducts = [];
-    this.artistProducts = [];
+    this.visibleCategoryKeys = [];
+    this.loadingCategoryKey = null;
+    this.homeCategoryProducts = this.emptyHomeCategoryProducts();
+    this.homeCategoryErrors = this.emptyHomeCategoryErrors();
     this.catalogMessage = message;
     this.catalogTone = tone;
+  }
+
+  private emptyHomeCategoryProducts(): Record<HomeCategoryKey, Product[]> {
+    return {
+      jogadores: [],
+      artistas: [],
+      fashion: [],
+    };
+  }
+
+  private emptyHomeCategoryErrors(): Record<HomeCategoryKey, string> {
+    return {
+      jogadores: '',
+      artistas: '',
+      fashion: '',
+    };
+  }
+
+  private emptyHomeCategoryCatalogMap(): Record<HomeCategoryKey, CatalogCategory | null> {
+    return {
+      jogadores: null,
+      artistas: null,
+      fashion: null,
+    };
+  }
+
+  private mapHomeCategories(categories: CatalogCategory[]): Record<HomeCategoryKey, CatalogCategory | null> {
+    return this.homeCategories.reduce((mappedCategories, category) => ({
+      ...mappedCategories,
+      [category.key]: categories.find((catalogCategory) => this.catalogCategoryMatchesHomeCategory(catalogCategory, category)) || null,
+    }), this.emptyHomeCategoryCatalogMap());
+  }
+
+  private catalogCategoryMatchesHomeCategory(catalogCategory: CatalogCategory, homeCategory: HomeCategory): boolean {
+    const expectedValues = new Set([
+      this.normalizeCategoryName(homeCategory.key),
+      this.normalizeCategoryName(homeCategory.label),
+    ]);
+    const normalizedName = this.normalizeCategoryName(catalogCategory.name);
+    const normalizedSlug = this.normalizeCategoryName(String(catalogCategory.slug || '').replace(/-/g, ' '));
+
+    return expectedValues.has(normalizedName) || expectedValues.has(normalizedSlug);
   }
 
 
@@ -1265,6 +1402,49 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     return categoryIds.has(category.id)
       || categoryNames.has(this.normalizeCategoryName(category.name))
       || categorySlugs.has(this.normalizeCategoryName(String(category.slug || '').replace(/-/g, ' ')));
+  }
+
+  private productMatchesHomeCategory(product: Product, homeCategory: HomeCategory): boolean {
+    const catalogCategory = this.homeCategoryCatalog(homeCategory.key);
+    const expectedNames = new Set([
+      this.normalizeCategoryName(homeCategory.key),
+      this.normalizeCategoryName(homeCategory.label),
+    ]);
+    const productNames = this.productCategoryNames(product).map((name) => this.normalizeCategoryName(name));
+    const productCategoryIds = new Set([
+      String(product.categoryId || ''),
+      ...(Array.isArray(product.categoryIds) ? product.categoryIds.map(String) : []),
+    ].filter(Boolean));
+    const productCategorySlugs = new Set<string>();
+
+    if (Array.isArray(product.categories)) {
+      product.categories.forEach((value) => {
+        if (value && typeof value === 'object') {
+          if (value.id) {
+            productCategoryIds.add(String(value.id));
+          }
+
+          if (value.slug) {
+            productCategorySlugs.add(this.normalizeCategoryName(value.slug.replace(/-/g, ' ')));
+          }
+        }
+      });
+    }
+
+    if (catalogCategory?.id && productCategoryIds.has(catalogCategory.id)) {
+      return true;
+    }
+
+    if (
+      catalogCategory?.slug
+      && productCategorySlugs.has(this.normalizeCategoryName(catalogCategory.slug.replace(/-/g, ' ')))
+    ) {
+      return true;
+    }
+
+    return productNames.some((name) => expectedNames.has(name))
+      || productCategorySlugs.has(this.normalizeCategoryName(homeCategory.key))
+      || productCategorySlugs.has(this.normalizeCategoryName(homeCategory.label));
   }
 
   private renderDynamicSections(products: Product[]): void {
@@ -1418,10 +1598,13 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private syncViewWithRoute(url: string): void {
     const path = url.split('?')[0].split('#')[0];
+    const previousPath = this.currentRoutePath;
+    const homeRoute = this.isHomeRoute(path);
     const checkoutRoute = path === '/checkout';
     const catalogRoute = path === '/catalogo';
     const wasCheckoutView = this.isCheckoutView;
 
+    this.currentRoutePath = path;
     this.isAuthRoute = [
       '/login',
       '/cadastro',
@@ -1432,11 +1615,20 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isCatalogView = catalogRoute;
     this.accountMenuOpen = false;
 
-    if (checkoutRoute && !wasCheckoutView) {
-      this.cartOpen = false;
+    if (homeRoute || catalogRoute || this.isAuthRoute || checkoutRoute) {
       this.selectedProduct = null;
       this.selectedProductColorIndex = 0;
       this.selectedProductImageSide = 'front';
+    }
+
+    if (homeRoute && previousPath && !this.isHomeRoute(previousPath)) {
+      this.reloadHomeOnNextEnsure = true;
+      this.cartOpen = false;
+      this.showHomeSkeletonState();
+    }
+
+    if (checkoutRoute && !wasCheckoutView) {
+      this.cartOpen = false;
       this.checkoutStep = 'address';
       this.checkoutError = '';
       this.paymentStatus = '';
@@ -1455,6 +1647,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+  }
+
+  private isHomeRoute(path: string): boolean {
+    return path === '' || path === '/' || path === '/home';
   }
 
   private toRecord(value: unknown): Record<string, unknown> {
@@ -1578,6 +1774,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.refreshParallax();
     window.addEventListener('scroll', requestParallaxUpdate, { passive: true });
     window.addEventListener('resize', requestParallaxUpdate);
+  }
+
+  private reactivateHomeVisuals(): void {
+    this.initScrollAnimations();
+    this.refreshParallax();
   }
 
   private refreshParallax(): void {
