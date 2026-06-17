@@ -63,7 +63,7 @@ export class OrdersComponent implements OnInit {
 
   statusLabel(status: OrderStatus): string {
     const labels: Record<OrderStatus, string> = {
-      pending: 'Pendente',
+      pending: 'Aguardando pagamento',
       paid: 'Pago',
       cancelled: 'Cancelado',
       failed: 'Falhou',

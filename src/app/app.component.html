@@ -726,7 +726,58 @@
           <span>Etapa 02</span>
           <h2>Pagamento</h2>
         </div>
-        <div id="cardPaymentBrick_container" class="payment-brick"></div>
+
+        <div class="payment-methods" role="radiogroup" aria-label="Forma de pagamento">
+          <button
+            type="button"
+            [class.active]="selectedPaymentMethod === 'card'"
+            (click)="selectPaymentMethod('card')"
+          >
+            <span>Cartão</span>
+            <small>Crédito via Mercado Pago</small>
+          </button>
+          <button
+            type="button"
+            [class.active]="selectedPaymentMethod === 'pix'"
+            (click)="selectPaymentMethod('pix')"
+          >
+            <span>Pix</span>
+            <small>QR Code e copia e cola</small>
+          </button>
+        </div>
+
+        <ng-container *ngIf="selectedPaymentMethod === 'card'">
+          <div id="cardPaymentBrick_container" class="payment-brick"></div>
+        </ng-container>
+
+        <section class="pix-payment-panel" *ngIf="selectedPaymentMethod === 'pix'">
+          <div class="pix-payment-intro">
+            <strong>Pagamento instantâneo por Pix</strong>
+            <p>Gere o QR Code, pague no app do seu banco e aguarde a confirmação automática.</p>
+          </div>
+
+          <button class="checkout-primary" type="button" (click)="generatePixPayment()" [disabled]="isCheckingOut">
+            {{ pixPayment ? 'Gerar novo Pix' : 'Gerar Pix' }}
+          </button>
+
+          <div class="pix-payment-result" *ngIf="pixPayment?.pix as pix">
+            <img
+              *ngIf="pix.qrCodeBase64"
+              [src]="'data:image/png;base64,' + pix.qrCodeBase64"
+              alt="QR Code Pix do pedido"
+            />
+            <label>
+              <span>Código Pix copia e cola</span>
+              <textarea readonly [value]="pix.qrCode || ''"></textarea>
+            </label>
+            <button type="button" class="pix-copy-button" (click)="copyPixCode()" [disabled]="!pix.qrCode">
+              Copiar código Pix
+            </button>
+            <a *ngIf="pix.ticketUrl" [href]="pix.ticketUrl" target="_blank" rel="noopener">Abrir comprovante Pix</a>
+            <small *ngIf="pixCopyStatus">{{ pixCopyStatus }}</small>
+          </div>
+        </section>
+
         <p class="checkout-status" *ngIf="paymentStatus">{{ paymentStatus }}</p>
         <p class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</p>
       </section>

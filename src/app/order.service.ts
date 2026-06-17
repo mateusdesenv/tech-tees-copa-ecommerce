@@ -6,6 +6,12 @@ import { environment } from '../environments/environment';
 
 export type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'failed' | 'completed';
 
+export interface OrderPixData {
+  qrCode?: string;
+  qrCodeBase64?: string;
+  ticketUrl?: string;
+}
+
 export interface OrderItem {
   productId: string;
   name: string;
@@ -26,6 +32,8 @@ export interface Order {
   createdAt: string;
   paymentId?: string;
   externalReference?: string;
+  paymentMethodId?: string;
+  pix?: OrderPixData;
 }
 
 export interface CreateOrderInput {
@@ -36,6 +44,8 @@ export interface CreateOrderInput {
   status: OrderStatus;
   paymentId?: string;
   externalReference?: string;
+  paymentMethodId?: string;
+  pix?: OrderPixData;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -98,6 +108,8 @@ export class OrderService {
       createdAt: new Date().toISOString(),
       paymentId: input.paymentId,
       externalReference: input.externalReference,
+      paymentMethodId: input.paymentMethodId,
+      pix: input.pix ? { ...input.pix } : undefined,
     };
 
     this.writeOrders([...orders, order]);
@@ -170,6 +182,8 @@ export class OrderService {
       createdAt,
       paymentId: source['paymentId'] ? String(source['paymentId']) : undefined,
       externalReference: source['externalReference'] ? String(source['externalReference']) : undefined,
+      paymentMethodId: source['paymentMethodId'] ? String(source['paymentMethodId']) : undefined,
+      pix: this.normalizePix(source['pix']),
       items: rawItems.map((item) => this.normalizeApiItem(item)).filter((item): item is OrderItem => Boolean(item)),
     };
   }
@@ -209,6 +223,19 @@ export class OrderService {
     if (status === 'cancelled' || status === 'canceled') return 'cancelled';
     if (status === 'rejected' || status === 'failed') return 'failed';
     return 'pending';
+  }
+
+  private normalizePix(value: unknown): OrderPixData | undefined {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+
+    const source = value as Record<string, unknown>;
+    return {
+      qrCode: source['qrCode'] ? String(source['qrCode']) : undefined,
+      qrCodeBase64: source['qrCodeBase64'] ? String(source['qrCodeBase64']) : undefined,
+      ticketUrl: source['ticketUrl'] ? String(source['ticketUrl']) : undefined,
+    };
   }
 
   private mergeOrders(apiOrders: Order[], localOrders: Order[]): Order[] {

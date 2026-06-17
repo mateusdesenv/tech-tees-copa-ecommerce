@@ -77,6 +77,13 @@
     <div><span>Total</span><strong>{{ formatCurrency(order.total) }}</strong></div>
   </div>
 
+  <div class="order-pix-box" *ngIf="order.status === 'pending' && order.paymentMethodId === 'pix' && order.pix?.qrCode">
+    <strong>Pix aguardando pagamento</strong>
+    <p>Use o código copia e cola abaixo para concluir o pagamento.</p>
+    <textarea readonly [value]="order.pix?.qrCode || ''"></textarea>
+    <a *ngIf="order.pix?.ticketUrl" [href]="order.pix?.ticketUrl" target="_blank" rel="noopener">Abrir Pix</a>
+  </div>
+
   <div class="order-product-list">
     <article *ngFor="let item of order.items">
       <div class="order-product-copy">
