@@ -997,16 +997,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       );
 
       this.pixPayment = payment;
-      this.paymentStatus = payment.status === 'approved'
-        ? 'Pagamento aprovado. Pedido recebido!'
-        : 'Aguardando pagamento. Após pagar, a confirmação pode levar alguns instantes.';
-
-      if (payment.status === 'approved') {
-        this.checkoutStep = 'confirmation';
-        this.clearCart();
-        this.metaPixel.trackPageView();
-        return;
-      }
+      this.paymentStatus = 'Aguardando pagamento. Após pagar, a confirmação pode levar alguns instantes.';
 
       this.orderService.createOrder({
         id: String(payment.externalReference || payment.paymentId || payment.id),
