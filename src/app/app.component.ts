@@ -138,10 +138,18 @@ interface AddressForm {
 
 interface MercadoPagoPaymentResponse {
   id: number;
+  paymentId?: string | number;
   status: string;
   statusDetail?: string;
   paymentMethodId?: string;
   externalReference: string;
+  pix?: PixPaymentData;
+}
+
+interface PixPaymentData {
+  qrCode?: string;
+  qrCodeBase64?: string;
+  ticketUrl?: string;
 }
 
 @Component({
@@ -218,6 +226,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   cepError = '';
   checkoutError = '';
   paymentStatus = '';
+  selectedPaymentMethod: 'card' | 'pix' = 'card';
+  pixPayment: MercadoPagoPaymentResponse | null = null;
+  pixCopyStatus = '';
   isCheckingOut = false;
   hoverCarouselTick = 0;
   cardColorSelection: Record<string, number> = {};
@@ -922,7 +933,113 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.checkoutStep = 'payment';
-    setTimeout(() => void this.renderPaymentBrick());
+    this.resetPixPayment();
+    setTimeout(() => void this.renderSelectedPaymentMethod());
+  }
+
+  selectPaymentMethod(method: 'card' | 'pix'): void {
+    if (this.selectedPaymentMethod === method) {
+      return;
+    }
+
+    this.selectedPaymentMethod = method;
+    this.checkoutError = '';
+    this.paymentStatus = '';
+    this.resetPixPayment();
+    this.resetPaymentBrick();
+
+    if (method === 'card') {
+      setTimeout(() => void this.renderPaymentBrick());
+    }
+  }
+
+  async generatePixPayment(): Promise<void> {
+    if (!this.cartItems.length || this.isCheckingOut) {
+      return;
+    }
+
+    this.isCheckingOut = true;
+    this.checkoutError = '';
+    this.pixCopyStatus = '';
+    this.paymentStatus = 'Gerando Pix...';
+
+    try {
+      const user = this.authService.currentUser || await this.authService.waitForAuthState();
+
+      if (!user) {
+        throw new Error('Não foi possível identificar o usuário autenticado.');
+      }
+
+      const idToken = await user.getIdToken();
+      const payment = await firstValueFrom(
+        this.http.post<MercadoPagoPaymentResponse>(`${this.apiBaseUrl}/checkout/create-pix-payment`, {
+          payment: {
+            fullName: this.addressForm.fullName,
+            email: this.addressForm.email,
+            cpf: this.addressForm.cpf,
+            payer: {
+              email: this.addressForm.email,
+              identification: {
+                type: 'CPF',
+                number: this.onlyDigits(this.addressForm.cpf),
+              },
+            },
+            shippingAddress: { ...this.addressForm },
+          },
+          items: this.checkoutItemsPayload(),
+          shipping: this.shipping(),
+          storeId: this.activeStore?.id,
+        }, {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        }),
+      );
+
+      this.pixPayment = payment;
+      this.paymentStatus = payment.status === 'approved'
+        ? 'Pagamento aprovado. Pedido recebido!'
+        : 'Aguardando pagamento. Após pagar, a confirmação pode levar alguns instantes.';
+
+      if (payment.status === 'approved') {
+        this.checkoutStep = 'confirmation';
+        this.clearCart();
+        this.metaPixel.trackPageView();
+        return;
+      }
+
+      this.orderService.createOrder({
+        id: String(payment.externalReference || payment.paymentId || payment.id),
+        userId: user.uid,
+        items: this.cartItems.map((item) => this.cartItemToOrderItem(item)),
+        total: this.orderTotal(),
+        status: 'pending',
+        paymentId: String(payment.paymentId || payment.id || ''),
+        externalReference: payment.externalReference,
+        paymentMethodId: 'pix',
+        pix: payment.pix,
+      });
+    } catch (error) {
+      this.paymentStatus = '';
+      this.checkoutError = `Não foi possível gerar o Pix: ${this.getErrorMessage(error)}`;
+    } finally {
+      this.isCheckingOut = false;
+    }
+  }
+
+  async copyPixCode(): Promise<void> {
+    const code = this.pixPayment?.pix?.qrCode || '';
+
+    if (!code) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      this.pixCopyStatus = 'Código Pix copiado.';
+    } catch {
+      this.pixCopyStatus = 'Não foi possível copiar automaticamente.';
+    }
   }
 
   async submitCheckoutPayment(formData: Record<string, unknown>): Promise<void> {
@@ -953,16 +1070,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
             },
             shippingAddress: { ...this.addressForm },
           },
-          items: this.cartItems.map((item) => ({
-            id: item.product.id || item.product.name,
-            title: `${item.product.name}${item.product.color ? ` - ${item.product.color}` : ''}`,
-            quantity: item.quantity,
-            unit_price: Number(item.product.price || 0),
-            image: item.product.image,
-            selectedColor: item.product.color || null,
-            selectedSize: item.product.selectedSize,
-            selectedGender: item.product.selectedGender,
-          })),
+          items: this.checkoutItemsPayload(),
           shipping: this.shipping(),
           storeId: this.activeStore?.id,
         }, {
@@ -975,16 +1083,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       if (payment.status === 'approved') {
         const purchaseValue = this.orderTotal();
         const purchasedProductIds = this.cartItems.map((item) => this.productPixelId(item.product));
-        const purchasedItems: OrderItem[] = this.cartItems.map((item) => ({
-          productId: String(item.product.id || item.product.slug || item.product.sku || item.product.name),
-          name: item.product.name,
-          quantity: item.quantity,
-          price: Number(item.product.price || 0),
-          size: item.product.selectedSize,
-          gender: item.product.selectedGender,
-          color: item.product.color,
-          image: item.product.image,
-        }));
+        const purchasedItems: OrderItem[] = this.cartItems.map((item) => this.cartItemToOrderItem(item));
         try {
           this.orderService.createOrder({
             id: String(payment.externalReference || payment.id),
@@ -1033,6 +1132,32 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     } finally {
       this.isCheckingOut = false;
     }
+  }
+
+  private checkoutItemsPayload(): Array<Record<string, unknown>> {
+    return this.cartItems.map((item) => ({
+      id: item.product.id || item.product.name,
+      title: `${item.product.name}${item.product.color ? ` - ${item.product.color}` : ''}`,
+      quantity: item.quantity,
+      unit_price: Number(item.product.price || 0),
+      image: item.product.image,
+      selectedColor: item.product.color || null,
+      selectedSize: item.product.selectedSize,
+      selectedGender: item.product.selectedGender,
+    }));
+  }
+
+  private cartItemToOrderItem(item: CartItem): OrderItem {
+    return {
+      productId: String(item.product.id || item.product.slug || item.product.sku || item.product.name),
+      name: item.product.name,
+      quantity: item.quantity,
+      price: Number(item.product.price || 0),
+      size: item.product.selectedSize,
+      gender: item.product.selectedGender,
+      color: item.product.color,
+      image: item.product.image,
+    };
   }
 
   private ensureRouteData(): Promise<void> {
@@ -1536,8 +1661,17 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     return requiredFilled && this.onlyDigits(this.addressForm.cpf).length === 11 && this.onlyDigits(this.addressForm.cep).length === 8;
   }
 
+  private renderSelectedPaymentMethod(): Promise<void> {
+    if (this.selectedPaymentMethod !== 'card') {
+      this.resetPaymentBrick();
+      return Promise.resolve();
+    }
+
+    return this.renderPaymentBrick();
+  }
+
   private async renderPaymentBrick(): Promise<void> {
-    if (this.cardPaymentBrickController || this.isCheckingOut || this.checkoutStep !== 'payment') {
+    if (this.selectedPaymentMethod !== 'card' || this.cardPaymentBrickController || this.isCheckingOut || this.checkoutStep !== 'payment') {
       return;
     }
 
@@ -1608,6 +1742,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cardPaymentBrickController = null;
   }
 
+  private resetPixPayment(): void {
+    this.pixPayment = null;
+    this.pixCopyStatus = '';
+  }
+
   private syncViewWithRoute(url: string): void {
     const path = url.split('?')[0].split('#')[0];
     const previousPath = this.currentRoutePath;
@@ -1645,6 +1784,8 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.checkoutStep = 'address';
       this.checkoutError = '';
       this.paymentStatus = '';
+      this.selectedPaymentMethod = 'card';
+      this.resetPixPayment();
       this.resetPaymentBrick();
       this.metaPixel.trackEvent('InitiateCheckout', {
         value: this.orderTotal(),
@@ -1656,6 +1797,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!checkoutRoute && wasCheckoutView) {
       this.checkoutError = '';
       this.paymentStatus = '';
+      this.resetPixPayment();
       this.resetPaymentBrick();
     }
 
