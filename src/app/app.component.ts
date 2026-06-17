@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { User } from '@angular/fire/auth';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
-import { Subscription, filter, firstValueFrom } from 'rxjs';
+import { Subscription, filter, finalize, firstValueFrom, forkJoin } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { CatalogCategory, CategoryService } from './category.service';
@@ -194,6 +194,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   homeCategoryProducts: Record<HomeCategoryKey, Product[]> = this.emptyHomeCategoryProducts();
   homeCategoryErrors: Record<HomeCategoryKey, string> = this.emptyHomeCategoryErrors();
   homeCategoryCatalogMap: Record<HomeCategoryKey, CatalogCategory | null> = this.emptyHomeCategoryCatalogMap();
+  isLoadingHome = false;
   activeStore: StoreResponse | null = null;
   selectedProduct: Product | null = null;
   selectedProductColorIndex = 0;
@@ -551,7 +552,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   isHomeCategoryLoading(key: HomeCategoryKey): boolean {
-    return this.loadingCategoryKey === key;
+    return this.isLoadingHome && this.loadingCategoryKey === key;
   }
 
   homeProductsByCategory(key: HomeCategoryKey): Product[] {
@@ -1065,7 +1066,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async fetchHomeProducts(): Promise<void> {
-    this.resetHomeViewState();
+    this.resetHomeViewState({ keepLoading: true });
+    this.isLoadingHome = true;
+    this.loadingCategoryKey = this.homeCategories[0]?.key || null;
     this.catalogMessage = '';
     this.catalogTone = '';
 
@@ -1078,11 +1081,17 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.activeStore = store;
-      const categories = await this.loadPublicCategories();
-      this.homeCategoryCatalogMap = this.mapHomeCategories(categories);
-      const products = await firstValueFrom(
-        this.productService.getProducts({ storeId: store.id, status: 'active' }),
+      const { categories, products } = await firstValueFrom(
+        forkJoin({
+          categories: this.categoryService.getPublicCategories(),
+          products: this.productService.getProducts({ storeId: store.id, status: 'active' }),
+        }).pipe(finalize(() => {
+          this.categoryService.clearCache();
+        })),
       );
+      this.catalogCategories = categories.filter((category) => category.active !== false);
+      this.catalogCategoryError = '';
+      this.homeCategoryCatalogMap = this.mapHomeCategories(this.catalogCategories);
       const sourceProducts = (products as Product[]).map((product, index) => this.normalizeProductIdentity(product, index));
 
       this.products = sourceProducts;
@@ -1115,6 +1124,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.renderDynamicSections(this.activeProducts);
       this.homeLoaded = true;
       this.loadingCategoryKey = null;
+      this.isLoadingHome = false;
       setTimeout(() => this.reactivateHomeVisuals());
     }
   }
@@ -1126,11 +1136,12 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  private resetHomeViewState(): void {
+  private resetHomeViewState(options: { keepLoading?: boolean } = {}): void {
     this.stopProductCardCarousel();
     this.productCardImagesCache.clear();
     this.visibleCategoryKeys = [];
     this.loadingCategoryKey = null;
+    this.isLoadingHome = Boolean(options.keepLoading);
     this.homeCategoryProducts = this.emptyHomeCategoryProducts();
     this.homeCategoryErrors = this.emptyHomeCategoryErrors();
     this.homeCategoryCatalogMap = this.emptyHomeCategoryCatalogMap();
@@ -1141,9 +1152,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private showHomeSkeletonState(): void {
-    this.resetHomeViewState();
+    this.resetHomeViewState({ keepLoading: true });
     this.catalogMessage = '';
     this.catalogTone = '';
+    this.isLoadingHome = true;
     this.loadingCategoryKey = this.homeCategories[0]?.key || null;
   }
 
@@ -1625,6 +1637,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.reloadHomeOnNextEnsure = true;
       this.cartOpen = false;
       this.showHomeSkeletonState();
+      this.forceHomeRevealVisibility();
     }
 
     if (checkoutRoute && !wasCheckoutView) {
@@ -1646,7 +1659,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.resetPaymentBrick();
     }
 
-    window.scrollTo({ top: 0, behavior: this.reducedMotion ? 'auto' : 'smooth' });
+    this.scrollToRouteTop(homeRoute);
   }
 
   private isHomeRoute(path: string): boolean {
@@ -1777,8 +1790,25 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private reactivateHomeVisuals(): void {
+    this.forceHomeRevealVisibility();
     this.initScrollAnimations();
     this.refreshParallax();
+  }
+
+  private scrollToRouteTop(homeRoute = false): void {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: homeRoute || this.reducedMotion ? 'auto' : 'smooth',
+      });
+    });
+  }
+
+  private forceHomeRevealVisibility(): void {
+    const root = this.elementRef.nativeElement;
+    const elements = Array.from(root.querySelectorAll('.hero, .benefits.reveal, #shop.reveal, .product-category-section')) as HTMLElement[];
+    elements.forEach((element) => element.classList.add('is-visible'));
   }
 
   private refreshParallax(): void {

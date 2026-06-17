@@ -22,4 +22,8 @@ export class CategoryService {
 
     return this.categoriesRequest;
   }
+
+  clearCache(): void {
+    this.categoriesRequest = undefined;
+  }
 }
