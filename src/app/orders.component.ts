@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from './auth.service';
 import { Order, OrderService, OrderStatus } from './order.service';
 
@@ -13,6 +13,7 @@ import { Order, OrderService, OrderStatus } from './order.service';
 export class OrdersComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly orderService = inject(OrderService);
+  private readonly router = inject(Router);
 
   orders: Order[] = [];
   selectedOrder: Order | null = null;
@@ -36,6 +37,10 @@ export class OrdersComponent implements OnInit {
 
   closeDetails(): void {
     this.selectedOrder = null;
+  }
+
+  backToStore(): void {
+    void this.router.navigateByUrl('/', { replaceUrl: true });
   }
 
   formatCurrency(value: number): string {
