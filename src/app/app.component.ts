@@ -9,6 +9,7 @@ import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { CatalogCategory, CategoryService } from './category.service';
 import { CONTACT_INFO } from './contact-info';
+import { GoogleAnalyticsService } from './google-analytics.service';
 import { MetaPixelService } from './meta-pixel.service';
 import { OrderItem, OrderService } from './order.service';
 import { ProductService } from './product.service';
@@ -163,6 +164,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly metaPixel = inject(MetaPixelService);
+  private readonly googleAnalytics = inject(GoogleAnalyticsService);
   private readonly authService = inject(AuthService);
   private readonly categoryService = inject(CategoryService);
   private readonly productService = inject(ProductService);
@@ -267,6 +269,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.metaPixel.init();
+    this.googleAnalytics.init();
     this.user$.subscribe((user) => {
       if (!user) {
         return;
@@ -287,6 +290,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe((event) => {
         this.syncViewWithRoute(event.urlAfterRedirects);
         this.metaPixel.trackPageView();
+        this.googleAnalytics.trackPageView(event.urlAfterRedirects);
         if (this.viewInitialized) {
           void this.ensureRouteData();
         }
