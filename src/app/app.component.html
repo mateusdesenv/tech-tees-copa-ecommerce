@@ -65,11 +65,13 @@
       </div>
 
       <div class="hero-visual">
-        <img
-          src="assets/imagem-banner-hero.webp"
-          alt="Quatro camisetas da coleção Brasil Tech Tees"
-          data-parallax-layer="hero"
-        />
+        <picture data-parallax-layer="hero">
+          <source media="(max-width: 640px)" srcset="assets/banner-techtees-mobile.webp" />
+          <img
+            src="assets/imagem-banner-hero.webp"
+            alt="Quatro camisetas da coleção Brasil Tech Tees"
+          />
+        </picture>
       </div>
     </div>
   </section>
