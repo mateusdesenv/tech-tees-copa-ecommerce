@@ -1,9 +1,9 @@
 export const environment = {
-  apiBaseUrl: "http://localhost:3000",
-  mercadoPagoPublicKey: "TEST-4795ac8f-4a54-47c9-858f-de6c007ca6cf",
+  apiBaseUrl: "https://api.techtees.online",
+  mercadoPagoPublicKey: "APP_USR-700951e0-a842-45b0-b1e9-7465640a7b1e",
   storeName: "Copa do mundo",
   storeSlug: "copa-do-mundo",
-  pixelId: "996614626592280",
+  pixelId: "796146570133494",
   firebase: {
   "apiKey": "AIzaSyDnYgIagfbxFmobgD7FZAt9IGLvFMAy1rA",
   "authDomain": "tech-tees-copa.firebaseapp.com",
